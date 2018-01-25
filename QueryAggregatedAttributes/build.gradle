@@ -1,0 +1,16 @@
+apply plugin: 'idea'
+apply plugin: 'java'
+apply plugin: 'application'
+
+
+dependencies {
+    compile project(':PlatformTools')
+}
+
+mainClassName = 'com.avid.ctms.examples.queryaggregatedattributes.QueryAggregatedAttributes'
+jar {
+    manifest {
+        attributes  'Main-Class': mainClassName,
+                    'Class-Path': configurations.runtime.files.collect {"lib/$it.name"}.join(' ')
+    }
+}

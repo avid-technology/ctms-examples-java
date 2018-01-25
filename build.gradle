@@ -1,0 +1,46 @@
+apply plugin: 'idea'
+apply plugin: 'java'
+
+
+subprojects {
+    repositories {
+        mavenCentral()
+    }
+
+    apply plugin: 'java'
+    dependencies {
+        compile 'net.sf.json-lib:json-lib:2.4:jdk15'
+        compile 'org.jboss.resteasy:resteasy-client:3.0.19.Final'
+		compile 'com.mashape.unirest:unirest-java:1.4.9'
+        compile 'io.projectreactor:reactor-core:3.0.4.RELEASE'
+        compile 'com.damnhandy:handy-uri-templates:2.1.2'
+    }
+
+    sourceCompatibility = 1.8
+    targetCompatibility = 1.8
+}
+
+task copyJars(type: Copy, dependsOn: subprojects.jar) {
+    from(subprojects.jar)
+    into project.file('dest')
+}
+
+task copyDeps(type: Copy) {
+    from(subprojects.configurations.runtime)
+    into project.file('dest/lib')
+}
+
+task copyArgumentFiles(type: Copy) {
+    from 'resources'
+    into project.file('dest/resources')
+}
+
+task copyReadmeFiles(type: Copy) {
+    from 'Readme.md'
+    into project.file('dest')
+}
+
+build.dependsOn.add('copyJars')
+build.dependsOn.add('copyDeps')
+build.dependsOn.add('copyReadmeFiles')
+build.dependsOn.add('copyArgumentFiles')
