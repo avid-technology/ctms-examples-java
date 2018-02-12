@@ -30,24 +30,24 @@
 * Special remarks on running the examples:
     * => When running the jars on a terminal, make sure you have specified correct command line arguments: java -jar __Example.jar__ _apidomain_ _[servicetype]_ _[realm]_ _username_ _password_ '_[searchexpression]_' _[advancedsearchdescriptionfilename]_
     * The SimpleSearch/SimpleSearchAsync examples await the searchexpression in single quotes as last argument:
-        * java -jar SimpleSearch.jar _apidomain_ _servicetype_ _realm_ _username_ _password_ '_searchexpression_'
-        * Example: java -jar SimpleSearch.jar upstream avid.mam.assets.access BEEF Administrator ABRAXAS "'*'"
-        * java -jar SimpleSearchAsync.jar _apidomain_ _servicetype_ _realm_ _username_ _password_ '_searchexpression_'
-        * Example: java -jar SimpleSearchAsync.jar upstream avid.mam.assets.access BEEF Administrator ABRAXAS "'*'"
+        * java -jar SimpleSearch.jar _apidomain_ _servicetype_ _serviceversion_ _realm_ _username_ _password_ '_searchexpression_'
+        * Example: java -jar SimpleSearch.jar upstream avid.mam.assets.access 0 BEEF Administrator ABRAXAS "'*'"
+        * java -jar SimpleSearchAsync.jar _apidomain_ _servicetype_ _serviceversion_ _realm_ _username_ _password_ '_searchexpression_'
+        * Example: java -jar SimpleSearchAsync.jar upstream avid.mam.assets.access 0 BEEF Administrator ABRAXAS "'*'"
     * The AdvancedSearch example awaits the file name of a file containing the advanced search description as last argument:
-        * java -jar AdvancedSearch.jar _apidomain_ _servicetype_ _realm_ _username_ _password_ _advancedsearchdescriptionfilename_
-        * Example: java -jar AdvancedSearch.jar upstream avid.mam.assets.access BEEF Administrator ABRAXAS resources\MAMAdvancedSearchDescription.txt
+        * java -jar AdvancedSearch.jar _apidomain_ _servicetype_ _serviceversion_ _realm_ _username_ _password_ _advancedsearchdescriptionfilename_
+        * Example: java -jar AdvancedSearch.jar upstream avid.mam.assets.access 0 BEEF Administrator ABRAXAS resources\MAMAdvancedSearchDescription.txt
     * The Orchestration example (jar) contains multiple executable Java classes: com.avid.ctms.examples.orchestration.queryprocesses.QueryProcesses and com.avid.ctms.examples.orchestration.startprocesses.StartProcess. Those have to be executed with a different command line, esp. without servicetype, their servicetype is always "avid.orchestration.ctc" and with java's "-cp" option:
-        * java -cp Orchestration.jar _mainclassname_ _realm_ _username_ _password_ ['_searchexpression_']
-        * Example: java -cp Orchestration.jar com.avid.ctms.examples.orchestration.queryprocesses.QueryProcesses upstream BEEF Administrator ABRAXAS "'*'"
-        * Example: java -cp Orchestration.jar com.avid.ctms.examples.orchestration.startprocesses.StartProcess upstream BEEF Administrator ABRAXAS
+        * java -cp Orchestration.jar _mainclassname_ _serviceversion_ _realm_ _username_ _password_ ['_searchexpression_']
+        * Example: java -cp Orchestration.jar com.avid.ctms.examples.orchestration.queryprocesses.QueryProcesses upstream 0 BEEF Administrator ABRAXAS "'*'"
+        * Example: java -cp Orchestration.jar com.avid.ctms.examples.orchestration.startprocesses.StartProcess upstream 0 BEEF Administrator ABRAXAS
     * The FileCheckIn example needs no servicetype (always "avid.mam.assets.access") argument.
-        * java -jar FileCheckIn.jar _apidomain_ _realm_ _username_ _password_ _sourcepath_
+        * java -jar FileCheckIn.jar _apidomain_ _serviceversion_ _realm_ _username_ _password_ _sourcepath_
             * _sourcepath_ represents the path, where the file to be checked in resides. If the path contains backslashes, it is required to escape it for three times each, e.g. one backslash must be represented by four backslashes.
-        * java -jar FileCheckIn.jar upstream BEEF Administrator ABRAXAS "\\\\\\\\nas4\\\\MAMSTORE\\\\mam-b\\\\MediaAssetManager\\\\Terminator.jpg"
+        * java -jar FileCheckIn.jar upstream 0 BEEF Administrator ABRAXAS "\\\\\\\\nas4\\\\MAMSTORE\\\\mam-b\\\\MediaAssetManager\\\\Terminator.jpg"
     * The QueryServiceRegistry example needs no servicetype (always "avid.ctms.registry") and no realm (always "global"/"") argument.
-        * node java -jar QueryServiceRegistry.jar _apidomain_ _username_ _password_
-        * Example: java -jar QueryServiceRegistry.jar upstream Administrator ABRAXAS
+        * node java -jar QueryServiceRegistry.jar _apidomain_ _serviceversion_ _username_ _password_
+        * Example: java -jar QueryServiceRegistry.jar upstream 0 Administrator ABRAXAS
     * Optionally, e.g. for debugging purposes, the JVM can be started with the VM arguments _-Dhttps.proxyHost=localhost -Dhttps.proxyPort=8888_ to configure a proxy server.
         * Notice, that using a proxy can reduce the performance of HTTP requests.
         * Notice also, that having set proxy options as shown above while *no proxy* is configured can reduce the performance of HTTP requests by an order of magnitude!
