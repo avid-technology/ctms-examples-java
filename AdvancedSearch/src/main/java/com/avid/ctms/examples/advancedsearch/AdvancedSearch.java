@@ -38,19 +38,20 @@ public class AdvancedSearch {
     }
 
     public static void main(String[] args) throws Exception {
-        if (7 != args.length) {
-            LOG.log(Level.INFO, "Usage: {0} <apidomain> <servicetype> <serviceversion> <realm> <username> <password> <advancedsearchdescriptionfilename>", AdvancedSearch.class.getSimpleName());
+        if (8 != args.length) {
+            LOG.log(Level.INFO, "Usage: {0} <apidomain> <oauthtoken> <servicetype> <serviceversion> <realm> <username> <password> <advancedsearchdescriptionfilename>", AdvancedSearch.class.getSimpleName());
         } else {
             final String apiDomain = args[0];
-            final String serviceType = args[1];
-            final String serviceVersion = args[2];
-            final String realm = args[3];
-            final String username = args[4];
-            final String password = args[5];
-            final Path advancedSearchDescriptionFilePath = Paths.get(args[6]);
+            final String baseOAuthToken = args[1];
+            final String serviceType = args[2];
+            final String serviceVersion = args[3];
+            final String realm = args[4];
+            final String username = args[5];
+            final String password = args[6];
+            final Path advancedSearchDescriptionFilePath = Paths.get(args[7]);
 
             if (advancedSearchDescriptionFilePath.toFile().exists()) {
-                final boolean successfullyAuthorized = PlatformTools.authorize(apiDomain, username, password);
+                final boolean successfullyAuthorized = PlatformTools.authorize(apiDomain, baseOAuthToken, username, password);
                 if (successfullyAuthorized) {
                     try {
                         /// Query CTMS Registry:

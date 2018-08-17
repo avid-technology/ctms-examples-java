@@ -28,15 +28,15 @@
             * This command will get dependent libraries from maven (e.g. json-lib 2.4) and create runnable jars in directory "dest".
 
 * Special remarks on running the examples:
-    * => When running the jars on a terminal, make sure you have specified correct command line arguments: java -jar __Example.jar__ _apidomain_ _[servicetype]_ _[realm]_ _username_ _password_ '_[searchexpression]_' _[advancedsearchdescriptionfilename]_
+    * => When running the jars on a terminal, make sure you have specified correct command line arguments: java -jar __Example.jar__ _apidomain_ _oauthToken_ _[servicetype]_ _[realm]_ _username_ _password_ '_[searchexpression]_' _[advancedsearchdescriptionfilename]_
     * The SimpleSearch/SimpleSearchAsync examples await the searchexpression in single quotes as last argument:
-        * java -jar SimpleSearch.jar _apidomain_ _servicetype_ _serviceversion_ _realm_ _username_ _password_ '_searchexpression_'
-        * Example: java -jar SimpleSearch.jar upstream avid.mam.assets.access 0 BEEF Administrator ABRAXAS "'*'"
-        * java -jar SimpleSearchAsync.jar _apidomain_ _servicetype_ _serviceversion_ _realm_ _username_ _password_ '_searchexpression_'
-        * Example: java -jar SimpleSearchAsync.jar upstream avid.mam.assets.access 0 BEEF Administrator ABRAXAS "'*'"
+        * java -jar SimpleSearch.jar _apidomain_ _oauthToken_ _servicetype_ _serviceversion_ _realm_ _username_ _password_ '_searchexpression_'
+        * Example: java -jar SimpleSearch.jar upstream oauthtoken avid.mam.assets.access 0 BEEF Administrator ABRAXAS "'*'"
+        * java -jar SimpleSearchAsync.jar _apidomain_ _oauthToken_ _servicetype_ _serviceversion_ _realm_ _username_ _password_ '_searchexpression_'
+        * Example: java -jar SimpleSearchAsync.jar upstream oauthtoken avid.mam.assets.access 0 BEEF Administrator ABRAXAS "'*'"
     * The AdvancedSearch example awaits the file name of a file containing the advanced search description as last argument:
-        * java -jar AdvancedSearch.jar _apidomain_ _servicetype_ _serviceversion_ _realm_ _username_ _password_ _advancedsearchdescriptionfilename_
-        * Example: java -jar AdvancedSearch.jar upstream avid.mam.assets.access 0 BEEF Administrator ABRAXAS resources\MAMAdvancedSearchDescription.txt
+        * java -jar AdvancedSearch.jar _apidomain_ _oauthToken_ _servicetype_ _serviceversion_ _realm_ _username_ _password_ _advancedsearchdescriptionfilename_
+        * Example: java -jar AdvancedSearch.jar upstream oauthtoken avid.mam.assets.access 0 BEEF Administrator ABRAXAS resources\MAMAdvancedSearchDescription.txt
     * The Orchestration example (jar) contains multiple executable Java classes: com.avid.ctms.examples.orchestration.queryprocesses.QueryProcesses and com.avid.ctms.examples.orchestration.startprocesses.StartProcess. Those have to be executed with a different command line, esp. without servicetype, their servicetype is always "avid.orchestration.ctc" and with java's "-cp" option:
         * java -cp Orchestration.jar _mainclassname_ _serviceversion_ _realm_ _username_ _password_ ['_searchexpression_']
         * Example: java -cp Orchestration.jar com.avid.ctms.examples.orchestration.queryprocesses.QueryProcesses upstream 0 BEEF Administrator ABRAXAS "'*'"
