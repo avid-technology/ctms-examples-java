@@ -42,9 +42,9 @@ public class QueryServiceRegistry {
             final String username = args[3];
             final String password = args[4];
 
-            final boolean successfullyAuthorized = PlatformTools.authorize(apiDomain, baseOAuthToken, username, password);
+            final String authorizationToken = PlatformTools.authorize(apiDomain, baseOAuthToken, username, password);
 
-            if (successfullyAuthorized) {
+            if (authorizationToken != null) {
                 try {
                     final long then = System.currentTimeMillis();
 
@@ -55,6 +55,7 @@ public class QueryServiceRegistry {
                     serviceRootsResourceConnection.setConnectTimeout(PlatformTools.getDefaultConnectionTimeoutms());
                     serviceRootsResourceConnection.setReadTimeout(PlatformTools.getDefaultReadTimeoutms());
                     serviceRootsResourceConnection.setRequestProperty("Accept", "application/hal+json");
+                    serviceRootsResourceConnection.setRequestProperty("Authorization", authorizationToken);
 
                     final int serviceRootsStatus = serviceRootsResourceConnection.getResponseCode();
                     System.out.println("Took: "+(System.currentTimeMillis() - then));

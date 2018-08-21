@@ -37,8 +37,8 @@ public class StartProcess {
             final String username = args[4];
             final String password = args[5];
 
-            final boolean successfullyAuthorized = PlatformTools.authorize(apiDomain, baseOAuthToken, username, password);
-            if (successfullyAuthorized) {
+            final String authorizationToken = PlatformTools.authorize(apiDomain, baseOAuthToken, username, password);
+            if (authorizationToken != null) {
                 try {
                     final String orchestrationServiceType = "avid.orchestration.ctc";
 
@@ -68,6 +68,7 @@ public class StartProcess {
                     startProcessConnection.setDoOutput(true);
                     startProcessConnection.setRequestProperty("Content-Type", "application/json");
                     startProcessConnection.setRequestProperty("Accept", "application/hal+json");
+                    startProcessConnection.setRequestProperty("Authorization", authorizationToken);
 
                     startProcessConnection.getOutputStream().write(processDescription.getBytes());
 

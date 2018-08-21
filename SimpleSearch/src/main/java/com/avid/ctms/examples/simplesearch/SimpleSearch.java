@@ -39,8 +39,8 @@ public class SimpleSearch {
             final String password = args[6];
             final String rawSearchExpression = args[7].substring(1, args[7].length() - 1);
 
-            final boolean successfullyAuthorized = PlatformTools.authorize(apiDomain, oauthToken, username, password);
-            if (successfullyAuthorized) {
+            final String authorizationToken = PlatformTools.authorize(apiDomain, oauthToken, username, password);
+            if (authorizationToken != null) {
                 try {
                     /// Query CTMS Registry:
                     final String registryServiceVersion = "0";
@@ -62,6 +62,7 @@ public class SimpleSearch {
                             simpleSearchResultPageConnection.setConnectTimeout(PlatformTools.getDefaultConnectionTimeoutms());
                             simpleSearchResultPageConnection.setReadTimeout(PlatformTools.getDefaultReadTimeoutms());
                             simpleSearchResultPageConnection.setRequestProperty("Accept", "application/hal+json");
+                            simpleSearchResultPageConnection.setRequestProperty("Authorization", authorizationToken);
 
                             final int simpleSearchStatus = simpleSearchResultPageConnection.getResponseCode();
                             if (HttpURLConnection.HTTP_OK == simpleSearchStatus) {

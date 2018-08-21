@@ -40,8 +40,8 @@ public class QueryProcesses {
             final String password = args[5];
             final String rawSearchExpression = args[6].substring(1, args[6].length() - 1);
 
-            final boolean successfullyAuthorized = PlatformTools.authorize(apiDomain, baseOAuthToken, username, password);
-            if (successfullyAuthorized) {
+            final String authorizationToken = PlatformTools.authorize(apiDomain, baseOAuthToken, username, password);
+            if (authorizationToken != null) {
                 try {
                     final String orchestrationServiceType = "avid.orchestration.ctc";
 
@@ -66,6 +66,7 @@ public class QueryProcesses {
                     processQueryResultPageConnection.setDoOutput(true);
                     processQueryResultPageConnection.setRequestProperty("Content-Type", "application/json");
                     processQueryResultPageConnection.setRequestProperty("Accept", "application/hal+json");
+                    processQueryResultPageConnection.setRequestProperty("Authorization", authorizationToken);
                     processQueryResultPageConnection.getOutputStream().write(queryContent.getBytes());
 
                     final int processQueryStatus = processQueryResultPageConnection.getResponseCode();
