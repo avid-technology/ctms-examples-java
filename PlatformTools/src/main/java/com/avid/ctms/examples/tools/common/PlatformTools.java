@@ -1,18 +1,41 @@
 package com.avid.ctms.examples.tools.common;
 
-import javax.net.ssl.*;
-import java.io.*;
-import java.net.*;
-import java.nio.charset.*;
-import java.security.*;
-import java.security.cert.*;
-import java.time.*;
-import java.time.format.*;
-import java.util.*;
-import java.util.concurrent.*;
-import java.util.logging.*;
+import com.avid.ctms.examples.tools.common.data.Links;
+import com.avid.ctms.examples.tools.common.data.token.Token;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.mashape.unirest.http.HttpResponse;
+import com.mashape.unirest.http.JsonNode;
+import com.mashape.unirest.http.Unirest;
+import com.mashape.unirest.http.exceptions.UnirestException;
+import net.sf.json.JSONArray;
+import net.sf.json.JSONObject;
+import org.apache.http.conn.ssl.NoopHostnameVerifier;
+import org.apache.http.conn.ssl.TrustSelfSignedStrategy;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClients;
 
-import net.sf.json.*;
+import javax.net.ssl.SSLContext;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.security.KeyManagementException;
+import java.security.KeyStoreException;
+import java.security.NoSuchAlgorithmException;
+import java.time.Instant;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Copyright 2013-2017 by Avid Technology, Inc.
@@ -26,7 +49,11 @@ import net.sf.json.*;
  * A set of tooling methods.
  */
 public class PlatformTools {
+
     private static final Logger LOG = Logger.getLogger(PlatformTools.class.getName());
+    private static final ObjectMapper objectMapper = new ObjectMapper();
+    private static ScheduledExecutorService scheduler;
+    private static ScheduledFuture<?> sessionRefresher;
 
     /**
      * Retrieves the default connection timeout in ms.
@@ -46,9 +73,6 @@ public class PlatformTools {
         return 60_000;
     }
 
-    private static ScheduledExecutorService scheduler;
-    private static ScheduledFuture<?> sessionRefresher;
-
     private PlatformTools() {
     }
 
@@ -57,124 +81,133 @@ public class PlatformTools {
      * The used server-certificate validation is tolerant. As a side effect the global cookie handler is configured in a
      * way to refer a set of cookies, which are required for the communication with the platform.
      *
-     * @param apiDomain address to get "auth"
-     * @param username  MCUX login
-     * @param password  MCUX password
+     * @param apiDomain         address to get "auth"
+     * @param defaultOAuthToken default oauth2 api token
+     * @param username          MCUX login
+     * @param password          MCUX password
      * @return true if authorization was successful, otherwise false
      */
-    public static boolean authorize(String apiDomain, String username, String password)
-            throws NoSuchAlgorithmException, KeyManagementException, IOException {
+    public static boolean authorize(String apiDomain, String defaultOAuthToken, String username, String password)
+            throws UnirestException, NoSuchAlgorithmException, KeyStoreException, KeyManagementException, IOException {
+        initializeUniRest();
+        String urlAuthorization = getIdentityProvider(apiDomain);
+        return login(apiDomain, urlAuthorization, defaultOAuthToken, username, password);
+    }
 
-        /// Establish tolerant certificate check:
-        final TrustManager[] trustAllCerts = new TrustManager[] {
-                new X509TrustManager() {
-                    @Override
-                    public X509Certificate[] getAcceptedIssuers() {
-                        return null;
-                    }
+    private static void initializeUniRest() throws KeyStoreException, NoSuchAlgorithmException, KeyManagementException {
+        final SSLContext sslContext =
+                org.apache.http.ssl.SSLContexts
+                        .custom()
+                        .loadTrustMaterial(null, new TrustSelfSignedStrategy())
+                        .build();
 
-                    @Override
-                    public void checkClientTrusted(X509Certificate[] certs, String authType) {
-                    }
+        CloseableHttpClient httpClient = HttpClients.custom()
+                .setSSLHostnameVerifier(new NoopHostnameVerifier())
+                .setSSLContext(sslContext)
+                .setConnectionTimeToLive(getDefaultConnectionTimeoutms(), TimeUnit.MILLISECONDS)
+                .build();
 
-                    @Override
-                    public void checkServerTrusted(X509Certificate[] certs, String authType) {
-                    }
-                }
-        };
-        final SSLContext sslContext = SSLContext.getInstance("SSL");
-        sslContext.init(null, trustAllCerts, new java.security.SecureRandom());
-        HttpsURLConnection.setDefaultSSLSocketFactory(sslContext.getSocketFactory());
-        final HostnameVerifier allHostsValid = (hostname, session) -> true;
-        HttpsURLConnection.setDefaultHostnameVerifier(allHostsValid);
-        /// END - Establish tolerant certificate check
+        Unirest.setHttpClient(httpClient);
+        Unirest.setDefaultHeader("Accept", "application/json");
+    }
 
+    private static String getIdentityProvider(String apiDomain) throws UnirestException, IOException {
+        HttpResponse<JsonNode> jsonNodeHttpResponse = Unirest.get(String.format("https://%s/auth/", apiDomain))
+                .asJson();
+        JsonNode body = jsonNodeHttpResponse.getBody();
+        String identityProviderHref = objectMapper.readValue(body.toString(), Links.class).getLinks().getIdentityProviders().get(0).getHref();
 
-        /// Establish in-memory cookie store:
-        CookieHandler.setDefault(new CookieManager(null, CookiePolicy.ACCEPT_ALL));
-        /// END - Establish in-memory cookie store
+        String identityProviders = Unirest.get(identityProviderHref).asJson().getBody().toString();
+        Links links = objectMapper.readValue(identityProviders, Links.class);
+        return links.getEmbedded().getProviders().get(0).getEmbeddedProvider().getRopcLdapProvider().get(0).getHref();
+    }
 
+    private static boolean login(String apiDomain, String urlAuthorization, String defaultOAuthToken, String username, String password) throws UnirestException, IOException {
+        final String loginContent = String.format("grant_type=password&username=%s&password=%s", username, password);
+        final String authorizationDefaultToken = String.format("Basic %s", defaultOAuthToken);
+        final HttpResponse<JsonNode> loginResponse =
+                Unirest.post(urlAuthorization)
+                        .header("Content-Type", "application/x-www-form-urlencoded")
+                        .header("Authorization", authorizationDefaultToken)
+                        .body(loginContent)
+                        .asJson();
 
-        /// Authorization procedure:
-        // Get identity providers:
-        final URL authURL = new URL(String.format("https://%s/auth", apiDomain));
-        final HttpURLConnection connectionAuth = prepareHttpURLConnection(authURL);
-        connectionAuth.setRequestProperty("Accept", "application/json");
-        final int authStatusCode = connectionAuth.getResponseCode();
-
-        final String rawAuthResult = getContent(connectionAuth);
-        final JSONObject authResult = JSONObject.fromObject(rawAuthResult);
-        final String urlIdentityProviders = authResult.getJSONObject("_links").getJSONArray("auth:identity-providers").getJSONObject(0).getString("href");
-
-        final URL identityProvidersURL = new URL(urlIdentityProviders);
-        final HttpURLConnection connectionIdentityProviders = prepareHttpURLConnection(identityProvidersURL);
-        connectionIdentityProviders.setRequestProperty("Accept", "application/json");
-        final int identityProvidersStatusCode = connectionIdentityProviders.getResponseCode();
-
-        final String rawIdentityProvidersResult = getContent(connectionIdentityProviders);
-        // Select MC|UX identity provider and retrieve login URL:
-        String urlAuthorization = null;
-        final JSONObject identityProvidersResult = JSONObject.fromObject(rawIdentityProvidersResult);
-        final JSONArray identityProviders = identityProvidersResult.getJSONObject("_embedded").getJSONArray("auth:identity-provider");
-        for (final Object item : identityProviders) {
-            final JSONObject identityProvider = (JSONObject) item;
-            if (Objects.equals(identityProvider.get("kind"), "mcux")) {
-                final JSONArray logins = identityProvider.getJSONObject("_links").getJSONArray("auth-mcux:login");
-                if (!logins.isEmpty()) {
-                    urlAuthorization = logins.getJSONObject(0).getString("href");
-                }
-                break;
-            }
+        final int loginStatusCode = loginResponse.getStatus();
+        if (HttpURLConnection.HTTP_SEE_OTHER == loginStatusCode || HttpURLConnection.HTTP_OK == loginStatusCode) {
+            Token token = objectMapper.readValue(loginResponse.getBody().toString(), Token.class);
+            Unirest.setDefaultHeader("Authorization", String.format("Bearer %s", token.getAccessToken()));
+            keepAliveSession(apiDomain);
+            return true;
         }
-
-        // Do the login:
-        if (null != urlAuthorization) {
-            final URL loginURL = new URL(urlAuthorization);
-            final HttpURLConnection connectionLogin = prepareHttpURLConnection(loginURL);
-            connectionLogin.setRequestMethod("POST");
-            connectionLogin.setDoOutput(true);
-            connectionLogin.setRequestProperty("Content-Type", "application/json");
-            connectionLogin.setRequestProperty("Accept", "application/json");
-            connectionLogin.setInstanceFollowRedirects(true);
-            final String loginContent = String.format("{ \"username\" : \"%s\", \"password\" : \"%s\"}", username, password);
-
-
-            connectionLogin.getOutputStream().write(loginContent.getBytes());
-            // Check success:
-            final int loginStatusCode = connectionLogin.getResponseCode();
-            if (HttpURLConnection.HTTP_SEE_OTHER == loginStatusCode || HttpURLConnection.HTTP_OK == loginStatusCode) {
-                scheduler = Executors.newScheduledThreadPool(1);
-
-                final Runnable sessionRefresherCode = () -> {
-                    try {
-                        sessionKeepAlive(apiDomain);
-                    } catch (final IOException exception) {
-                        LOG.log(Level.SEVERE, "failure", exception);
-                    }
-                };
-                final long refreshPeriodSeconds = 120;
-                sessionRefresher = scheduler.scheduleAtFixedRate(sessionRefresherCode, refreshPeriodSeconds, refreshPeriodSeconds, TimeUnit.SECONDS);
-                return true;
-            }
-        }
-        /// END - Authorization procedure
-
         return false;
+    }
+
+    private static void keepAliveSession(String apiDomain) {
+        scheduler = Executors.newScheduledThreadPool(1);
+        final Runnable sessionRefresher = () -> {
+            try {
+                sendKeepAliveRequest(apiDomain);
+            } catch (UnirestException e) {
+                LOG.log(Level.SEVERE, "Session refresher error", e);
+            }
+        };
+        final long refreshPeriodSeconds = 12;
+        PlatformTools.sessionRefresher = scheduler.scheduleAtFixedRate(sessionRefresher, refreshPeriodSeconds, refreshPeriodSeconds, TimeUnit.SECONDS);
+    }
+
+    /**
+     * Signals the platform, that our session is still in use.
+     *
+     * @param apiDomain address against to which we want send a keep alive signal
+     * @throws UnirestException
+     */
+    private static void sendKeepAliveRequest(String apiDomain) throws UnirestException {
+        Unirest.post(String.format("https://%s/auth/tokens/current/extension", apiDomain))
+                .asJson();
+    }
+
+    /**
+     * Performs a logout against the platform.
+     *
+     * @param apiDomain address against to which we want to logout
+     * @throws IOException
+     * @throws UnirestException
+     */
+    public static void logout(String apiDomain) throws UnirestException, IOException {
+        callRemoveTokenRequest(apiDomain);
+        removeSessionKeepAlive();
+    }
+
+    private static void callRemoveTokenRequest(String apiDomain) throws UnirestException, IOException {
+        HttpResponse<JsonNode> jsonNodeHttpResponse = Unirest.get(String.format("https://%s/auth/", apiDomain))
+                .asJson();
+        Links links = objectMapper.readValue(jsonNodeHttpResponse.getBody().toString(), Links.class);
+        String currentTokenRemovalUrl = links.getLinks().getToken().get(0).getHref();
+        Unirest.delete(currentTokenRemovalUrl)
+                .header("Accept", "application/json")
+                .asJson();
+    }
+
+    private static void removeSessionKeepAlive() {
+        if (null != scheduler) {
+            sessionRefresher.cancel(true);
+            scheduler.shutdown();
+        }
     }
 
     /**
      * Performs a CTMS Registry lookup or defaults to the specified URI for the resource in question.
      *
-     * @param apiDomain address against to which we want send a keep alive signal
-     * @param serviceTypes list of service types, of which the resource in question should be looked up in the CTMS
-     *          Registry
+     * @param apiDomain              address against to which we want send a keep alive signal
+     * @param serviceTypes           list of service types, of which the resource in question should be looked up in the CTMS
+     *                               Registry
      * @param registryServiceVersion registryServiceVersion version of the CTMS Registry to query
-     * @param resourceName resourceName resource to look up in the CTMS Registry, such as "search:simple-search"
-     * @param orDefaultUriTemplate URI template which will be returned in the promise, if the CTMS Registry is
-     *          unreachable or the resource in question cannot be found
-     * @return  a List&lt;String> under which the queried resource can be found. If the CTMS Registry is unreachable or
-     *          the resource in question cannot be found, the list of URI templates will contain the
-     *          orDefaultUriTemplate as single entry.
+     * @param resourceName           resourceName resource to look up in the CTMS Registry, such as "search:simple-search"
+     * @param orDefaultUriTemplate   URI template which will be returned in the promise, if the CTMS Registry is
+     *                               unreachable or the resource in question cannot be found
+     * @return a List&lt;String> under which the queried resource can be found. If the CTMS Registry is unreachable or
+     * the resource in question cannot be found, the list of URI templates will contain the
+     * orDefaultUriTemplate as single entry.
      */
     public static List<String> findInRegistry(String apiDomain, List<String> serviceTypes, String registryServiceVersion, String resourceName, String orDefaultUriTemplate) throws IOException {
         try {
@@ -239,79 +272,6 @@ public class PlatformTools {
 
         LOG.log(Level.INFO, "unknown error requesting the CTMS Registry, defaulting to the specified URI template");
         return Collections.singletonList(orDefaultUriTemplate);
-    }
-
-    /**
-     * Signals the platform, that our session is still in use.
-     *
-     * @param apiDomain address against to which we want send a keep alive signal
-     * @throws IOException
-     */
-    public static void sessionKeepAlive(String apiDomain) throws IOException {
-        // TODO: this is a workaround, see {CORE-7359}. In future the access token prolongation API should be used.
-        final URL pingURL = new URL(String.format("https://%s/api/middleware/service/ping", apiDomain));
-        final HttpURLConnection connectionPing = prepareHttpURLConnection(pingURL);
-        connectionPing.setRequestProperty("Accept", "application/json");
-        final int ignoredPingStatusCode = connectionPing.getResponseCode();
-    }
-
-    /**
-     * Performs a logout against the platform.
-     *
-     * @param apiDomain address against to which we want to logout
-     * @throws IOException
-     */
-    public static void logout(String apiDomain) throws IOException {
-        /// Logout from platform:
-        final URL authURL = new URL(String.format("https://%s/auth", apiDomain));
-        final HttpURLConnection connectionAuth = (HttpURLConnection) authURL.openConnection();
-        connectionAuth.setRequestProperty("Accept", "application/json");
-        connectionAuth.setConnectTimeout(getDefaultConnectionTimeoutms());
-        connectionAuth.setReadTimeout(getDefaultReadTimeoutms());
-        final int authStatusCode = connectionAuth.getResponseCode();
-
-        final String rawAuthResult = getContent(connectionAuth);
-        final JSONObject authResult = JSONObject.fromObject(rawAuthResult);
-        final JSONArray authTokens = authResult.getJSONObject("_links").getJSONArray("auth:token");
-        URL currentTokenURL = null;
-        for (final Object item : authTokens) {
-            final JSONObject authToken = (JSONObject) item;
-            if (Objects.equals(authToken.get("name"), "current")) {
-                currentTokenURL = new URL(authToken.getString("href"));
-                break;
-            }
-        }
-
-        if (null != currentTokenURL) {
-            final HttpURLConnection currentTokenConnection = prepareHttpURLConnection(currentTokenURL);
-            currentTokenConnection.setRequestProperty("Accept", "application/json");
-            final int currentTokenStatusCode = currentTokenConnection.getResponseCode();
-
-            final String rawCurrentTokenResult = getContent(currentTokenConnection);
-            final JSONObject currentTokenResult = JSONObject.fromObject(rawCurrentTokenResult);
-
-            final String urlCurrentTokenRemoval = currentTokenResult.getJSONObject("_links").getJSONArray("auth-token:removal").getJSONObject(0).getString("href");
-            final URL currentTokenRemovalURL = new URL(urlCurrentTokenRemoval);
-
-            final HttpURLConnection currentTokenRemovalConnection = prepareHttpURLConnection(currentTokenRemovalURL);
-            currentTokenRemovalConnection.setRequestMethod("DELETE");
-            // Should result in 204:
-            final int currentTokenRemovalStatusCode = currentTokenRemovalConnection.getResponseCode();
-        }
-
-
-        /// Unregister the keep alive task:
-        if (null != scheduler) {
-            sessionRefresher.cancel(true);
-            scheduler.shutdown();
-        }
-    }
-
-    public static HttpURLConnection prepareHttpURLConnection(URL identityProvidersURL) throws IOException {
-        final HttpURLConnection connectionIdentityProviders = (HttpURLConnection) identityProvidersURL.openConnection();
-        connectionIdentityProviders.setConnectTimeout(getDefaultConnectionTimeoutms());
-        connectionIdentityProviders.setReadTimeout(getDefaultReadTimeoutms());
-        return connectionIdentityProviders;
     }
 
     /**

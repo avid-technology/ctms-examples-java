@@ -27,18 +27,19 @@ public class SimpleSearch {
     }
 
     public static void main(String[] args) throws Exception {
-        if (7 != args.length || "'".equals(args[6]) || !args[6].startsWith("'") || !args[6].endsWith("'")) {
-            LOG.log(Level.INFO, "Usage: {0} <apidomain> <servicetype> <serviceversion> <realm> <username> <password> '<simplesearchexpression>'", SimpleSearch.class.getSimpleName());
+        if (8 != args.length || "'".equals(args[7]) || !args[7].startsWith("'") || !args[7].endsWith("'")) {
+            LOG.log(Level.INFO, "Usage: {0} <apidomain> <oauthtoken> <servicetype> <serviceversion> <realm> <username> <password> '<simplesearchexpression>'", SimpleSearch.class.getSimpleName());
         } else {
             final String apiDomain = args[0];
-            final String serviceType = args[1];
-            final String serviceVersion = args[2];
-            final String realm = args[3];
-            final String username = args[4];
-            final String password = args[5];
-            final String rawSearchExpression = args[6].substring(1, args[6].length() - 1);
+            final String oauthToken = args[1];
+            final String serviceType = args[2];
+            final String serviceVersion = args[3];
+            final String realm = args[4];
+            final String username = args[5];
+            final String password = args[6];
+            final String rawSearchExpression = args[7].substring(1, args[7].length() - 1);
 
-            final boolean successfullyAuthorized = PlatformTools.authorize(apiDomain, username, password);
+            final boolean successfullyAuthorized = PlatformTools.authorize(apiDomain, oauthToken, username, password);
             if (successfullyAuthorized) {
                 try {
                     /// Query CTMS Registry:
@@ -79,8 +80,8 @@ public class SimpleSearch {
                                             final String id = asset.getJSONObject("base").getString("id");
                                             final String name =
                                                     (asset.getJSONObject("common").has("name"))
-                                                        ? asset.getJSONObject("common").getString("name")
-                                                        : "";
+                                                            ? asset.getJSONObject("common").getString("name")
+                                                            : "";
 
                                             formatter.format("\tAsset#: %d, id: %s, name: '%s'%n", ++assetNo, id, name);
                                         }
@@ -96,7 +97,7 @@ public class SimpleSearch {
                                         ? new URL(linkToNextPage.getString("href"))
                                         : null;
                             } else {
-                                LOG.log(Level.INFO, "Simple search failed for search expression {0}. -> {1}", new Object[] {rawSearchExpression, PlatformTools.getContent(simpleSearchResultPageConnection)});
+                                LOG.log(Level.INFO, "Simple search failed for search expression {0}. -> {1}", new Object[]{rawSearchExpression, PlatformTools.getContent(simpleSearchResultPageConnection)});
                                 simpleSearchResultPageURL = null;
                             }
                         } while (null != simpleSearchResultPageURL);

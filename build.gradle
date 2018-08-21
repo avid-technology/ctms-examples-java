@@ -14,6 +14,7 @@ subprojects {
 		compile 'com.mashape.unirest:unirest-java:1.4.9'
         compile 'io.projectreactor:reactor-core:3.0.4.RELEASE'
         compile 'com.damnhandy:handy-uri-templates:2.1.2'
+        compile group: 'com.fasterxml.jackson.core', name: 'jackson-databind', version: '2.0.1'
     }
 
     sourceCompatibility = 1.8

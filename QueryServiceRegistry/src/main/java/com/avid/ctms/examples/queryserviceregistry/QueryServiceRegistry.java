@@ -1,6 +1,7 @@
 package com.avid.ctms.examples.queryserviceregistry;
 
 import com.avid.ctms.examples.tools.common.PlatformTools;
+import com.mashape.unirest.http.exceptions.UnirestException;
 import net.sf.json.JSONArray;
 import net.sf.json.JSONObject;
 
@@ -8,6 +9,7 @@ import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.security.KeyManagementException;
+import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
 import java.util.*;
 import java.util.Formatter;
@@ -30,16 +32,17 @@ public class QueryServiceRegistry {
     private QueryServiceRegistry() {
     }
 
-    public static void main(String[] args) throws NoSuchAlgorithmException, KeyManagementException, IOException {
-        if (4 != args.length) {
-            LOG.log(Level.INFO, "Usage: {0} <apidomain> <serviceversion> <username> <password>", QueryServiceRegistry.class.getSimpleName());
+    public static void main(String[] args) throws NoSuchAlgorithmException, KeyManagementException, IOException, KeyStoreException, UnirestException {
+        if (5 != args.length) {
+            LOG.log(Level.INFO, "Usage: {0} <apidomain> <oauthtoken> <serviceversion> <username> <password>", QueryServiceRegistry.class.getSimpleName());
         } else {
             final String apiDomain = args[0];
-            final String serviceVersion = args[1];
-            final String username = args[2];
-            final String password = args[3];
+            final String baseOAuthToken = args[1];
+            final String serviceVersion = args[2];
+            final String username = args[3];
+            final String password = args[4];
 
-            final boolean successfullyAuthorized = PlatformTools.authorize(apiDomain, username, password);
+            final boolean successfullyAuthorized = PlatformTools.authorize(apiDomain, baseOAuthToken, username, password);
 
             if (successfullyAuthorized) {
                 try {

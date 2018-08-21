@@ -29,17 +29,18 @@ public class QueryProcesses {
     }
 
     public static void main(String[] args) throws Exception {
-        if (6 != args.length || "'".equals(args[5]) || !args[5].startsWith("'") || !args[5].endsWith("'")) {
-            LOG.log(Level.INFO, "Usage: {0} <apidomain> <serviceversion> <realm> <username> <password> '<simplesearchexpression>'", QueryProcesses.class.getSimpleName());
+        if (7 != args.length || "'".equals(args[6]) || !args[6].startsWith("'") || !args[6].endsWith("'")) {
+            LOG.log(Level.INFO, "Usage: {0} <apidomain> <oauthtoken> <serviceversion> <realm> <username> <password> '<simplesearchexpression>'", QueryProcesses.class.getSimpleName());
         } else {
             final String apiDomain = args[0];
-            final String serviceVersion = args[1];
-            final String realm = args[2];
-            final String username = args[3];
-            final String password = args[4];
-            final String rawSearchExpression = args[5].substring(1, args[5].length() - 1);
+            final String baseOAuthToken = args[1];
+            final String serviceVersion = args[2];
+            final String realm = args[3];
+            final String username = args[4];
+            final String password = args[5];
+            final String rawSearchExpression = args[6].substring(1, args[6].length() - 1);
 
-            final boolean successfullyAuthorized = PlatformTools.authorize(apiDomain, username, password);
+            final boolean successfullyAuthorized = PlatformTools.authorize(apiDomain, baseOAuthToken, username, password);
             if (successfullyAuthorized) {
                 try {
                     final String orchestrationServiceType = "avid.orchestration.ctc";
