@@ -46,8 +46,8 @@ public class QueryAggregatedAttributes {
             // Specify an IETF BCP 47 language tag, such as "en-US":
             final String lang = ""; // "" represents the default language, which is "en"
 
-            final boolean successfullyAuthorized = PlatformTools.authorize(apiDomain, baseOAuthToken, username, password);
-            if (successfullyAuthorized) {
+            final String authorizationToken = PlatformTools.authorize(apiDomain, baseOAuthToken, username, password);
+            if (authorizationToken != null) {
                 try {
                     final String dataModelAggregatorServiceType = "avid.ctms.datamodel.aggregator";
 
@@ -65,6 +65,7 @@ public class QueryAggregatedAttributes {
                     aggregatedDataModelResourceConnection.setConnectTimeout(PlatformTools.getDefaultConnectionTimeoutms());
                     aggregatedDataModelResourceConnection.setReadTimeout(PlatformTools.getDefaultReadTimeoutms());
                     aggregatedDataModelResourceConnection.setRequestProperty("Accept", "application/hal+json");
+                    aggregatedDataModelResourceConnection.setRequestProperty("Authorization", authorizationToken);
 
                     final int aggregatedDataModelStatus = aggregatedDataModelResourceConnection.getResponseCode();
                     if (HttpURLConnection.HTTP_OK == aggregatedDataModelStatus) {

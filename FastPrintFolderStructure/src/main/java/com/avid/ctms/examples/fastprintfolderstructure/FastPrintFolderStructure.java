@@ -35,7 +35,7 @@ public class FastPrintFolderStructure {
      * @param results  the list, in which the results of traversal will be collected !!will be modified!!
      * @param depth    the depth of the traversal
      */
-    private static void traverse(ItemInfo rootItem, List<ItemInfo> results, int depth) throws Exception {
+    private static void traverse(String token, ItemInfo rootItem, List<ItemInfo> results, int depth) throws Exception {
         final Collection<ItemInfo> children = new ArrayList<>();
         final URL itemURL = rootItem.href; //new URL(rootItem.href.replace(" ", "%20"));
 
@@ -43,6 +43,7 @@ public class FastPrintFolderStructure {
         getItemConnection.setConnectTimeout(PlatformTools.getDefaultConnectionTimeoutms());
         getItemConnection.setReadTimeout(PlatformTools.getDefaultReadTimeoutms());
         getItemConnection.setRequestProperty("Accept", "application/hal+json");
+        getItemConnection.setRequestProperty("Authorization", token);
 
         final int itemStatus = getItemConnection.getResponseCode();
         if (HttpURLConnection.HTTP_OK == itemStatus) {
@@ -83,6 +84,7 @@ public class FastPrintFolderStructure {
                             itemNextPageConnection.setConnectTimeout(PlatformTools.getDefaultConnectionTimeoutms());
                             itemNextPageConnection.setReadTimeout(PlatformTools.getDefaultReadTimeoutms());
                             itemNextPageConnection.setRequestProperty("Accept", "application/hal+json");
+                            itemNextPageConnection.setRequestProperty("Authorization", token);
 
                             final int itemNextPageStatus = itemNextPageConnection.getResponseCode();
                             if (200 == itemNextPageStatus) {
@@ -101,7 +103,7 @@ public class FastPrintFolderStructure {
 
             for (final ItemInfo item : children) {
                 if (item.hasChildren) {
-                    traverse(item, results, depth + 1);
+                    traverse(token, item, results, depth + 1);
                 }
             }
 
@@ -128,8 +130,8 @@ public class FastPrintFolderStructure {
             final String username = args[5];
             final String password = args[6];
 
-            final boolean successfullyAuthorized = PlatformTools.authorize(apiDomain, baseOAuthToken, username, password);
-            if (successfullyAuthorized) {
+            final String authorizationToken = PlatformTools.authorize(apiDomain, baseOAuthToken, username, password);
+            if (authorizationToken != null) {
                 try {
                     /// Query CTMS Registry:
                     final String registryServiceVersion = "0";
@@ -142,6 +144,7 @@ public class FastPrintFolderStructure {
                     getLocationsConnection.setConnectTimeout(PlatformTools.getDefaultConnectionTimeoutms());
                     getLocationsConnection.setReadTimeout(PlatformTools.getDefaultReadTimeoutms());
                     getLocationsConnection.setRequestProperty("Accept", "application/hal+json");
+                    getLocationsConnection.setRequestProperty("Authorization", authorizationToken);
 
                     final int locationsStatus = getLocationsConnection.getResponseCode();
                     if (HttpURLConnection.HTTP_OK == locationsStatus) {
@@ -163,7 +166,7 @@ public class FastPrintFolderStructure {
                         final List<ItemInfo> results = new ArrayList<>();
                         /// Traverse the folder tree and collect the results in the passed list:
                         final long then = System.currentTimeMillis();
-                        traverse(rootItem, results, 0);
+                        traverse(authorizationToken, rootItem, results, 0);
                         final StringBuilder sb = new StringBuilder();
                         try (final Formatter formatter = new Formatter(sb)) {
                             for (final ItemInfo item : results) {

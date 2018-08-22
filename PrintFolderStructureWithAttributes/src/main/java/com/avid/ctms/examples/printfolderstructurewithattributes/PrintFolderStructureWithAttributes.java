@@ -40,7 +40,7 @@ public class PrintFolderStructureWithAttributes {
      * @param depth           the depth of the traversal
      * @param extraAttributes a comma separated list of attributes to query for each item additionally
      */
-    private static void traverse(ItemInfo rootItem, List<ItemInfo> results, int depth, String extraAttributes) throws Exception {
+    private static void traverse(String token, ItemInfo rootItem, List<ItemInfo> results, int depth, String extraAttributes) throws Exception {
         Objects.requireNonNull(extraAttributes);
 
         final Collection<ItemInfo> children = new ArrayList<>();
@@ -56,6 +56,7 @@ public class PrintFolderStructureWithAttributes {
         getItemConnection.setConnectTimeout(PlatformTools.getDefaultConnectionTimeoutms());
         getItemConnection.setReadTimeout(PlatformTools.getDefaultReadTimeoutms());
         getItemConnection.setRequestProperty("Accept", "application/hal+json");
+        getItemConnection.setRequestProperty("Authorization", token);
 
         final int itemStatus = getItemConnection.getResponseCode();
         if (HttpURLConnection.HTTP_OK == itemStatus) {
@@ -114,7 +115,7 @@ public class PrintFolderStructureWithAttributes {
 
             for (final ItemInfo item : children) {
                 if (item.hasChildren) {
-                    traverse(item, results, depth + 1, extraAttributes);
+                    traverse(token, item, results, depth + 1, extraAttributes);
                 }
             }
 
@@ -201,8 +202,8 @@ public class PrintFolderStructureWithAttributes {
 
             final String[] extraAttributeKeys = {"CREATION_DATETIME", "COMMENT", "RIGHTS_INDICATOR", "piffpaff", "escape\\,me"};
 
-            final boolean successfullyAuthorized = PlatformTools.authorize(apiDomain, baseOAuthToken, username, password);
-            if (successfullyAuthorized) {
+            final String authorizationToken = PlatformTools.authorize(apiDomain, baseOAuthToken, username, password);
+            if (authorizationToken != null) {
                 try {
                     /// Query CTMS Registry:
                     final String registryServiceVersion = "0";
@@ -215,6 +216,7 @@ public class PrintFolderStructureWithAttributes {
                     getLocationsConnection.setConnectTimeout(PlatformTools.getDefaultConnectionTimeoutms());
                     getLocationsConnection.setReadTimeout(PlatformTools.getDefaultReadTimeoutms());
                     getLocationsConnection.setRequestProperty("Accept", "application/hal+json");
+                    getLocationsConnection.setRequestProperty("Authorization", authorizationToken);
 
                     final int locationsStatus = getLocationsConnection.getResponseCode();
                     if (HttpURLConnection.HTTP_OK == locationsStatus) {
@@ -250,7 +252,7 @@ public class PrintFolderStructureWithAttributes {
                         final List<ItemInfo> results = new ArrayList<>();
                         /// Traverse the folder tree and collect the results in the passed list:
                         final long then = System.currentTimeMillis();
-                        traverse(rootItem, results, 0, extraAttributes);
+                        traverse(authorizationToken, rootItem, results, 0, extraAttributes);
                         final StringBuilder sb = new StringBuilder();
                         try (final Formatter formatter = new Formatter(sb)){
                             for (final ItemInfo item : results) {

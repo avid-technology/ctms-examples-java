@@ -51,8 +51,8 @@ public class AdvancedSearch {
             final Path advancedSearchDescriptionFilePath = Paths.get(args[7]);
 
             if (advancedSearchDescriptionFilePath.toFile().exists()) {
-                final boolean successfullyAuthorized = PlatformTools.authorize(apiDomain, baseOAuthToken, username, password);
-                if (successfullyAuthorized) {
+                final String authorizationToken = PlatformTools.authorize(apiDomain, baseOAuthToken, username, password);
+                if (authorizationToken != null) {
                     try {
                         /// Query CTMS Registry:
                         final String registryServiceVersion = "0";
@@ -65,6 +65,7 @@ public class AdvancedSearch {
                         searchesResourceConnection.setConnectTimeout(PlatformTools.getDefaultConnectionTimeoutms());
                         searchesResourceConnection.setReadTimeout(PlatformTools.getDefaultReadTimeoutms());
                         searchesResourceConnection.setRequestProperty("Accept", "application/hal+json");
+                        searchesResourceConnection.setRequestProperty("Authorization", authorizationToken);
 
                         final int searchesStatus = searchesResourceConnection.getResponseCode();
                         if (HttpURLConnection.HTTP_OK == searchesStatus) {
@@ -87,6 +88,7 @@ public class AdvancedSearch {
                                 advancedSearchPageConnection.setDoOutput(true);
                                 advancedSearchPageConnection.setRequestProperty("Content-Type", "application/json");
                                 advancedSearchPageConnection.setRequestProperty("Accept", "application/hal+json");
+                                advancedSearchPageConnection.setRequestProperty("Authorization", authorizationToken);
                                 advancedSearchPageConnection.getOutputStream().write(advancedSearchDescription.getBytes());
 
                                 final int advancedSearchStatus = advancedSearchPageConnection.getResponseCode();

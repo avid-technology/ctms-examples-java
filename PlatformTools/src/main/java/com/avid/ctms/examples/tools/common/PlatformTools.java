@@ -14,7 +14,10 @@ import org.apache.http.conn.ssl.TrustSelfSignedStrategy;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 
+import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
@@ -25,6 +28,8 @@ import java.nio.charset.StandardCharsets;
 import java.security.KeyManagementException;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
+import java.security.cert.X509Certificate;
 import java.time.Instant;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -85,9 +90,9 @@ public class PlatformTools {
      * @param defaultOAuthToken default oauth2 api token
      * @param username          MCUX login
      * @param password          MCUX password
-     * @return true if authorization was successful, otherwise false
+     * @return authorization token as string or null if authorization process failed.
      */
-    public static boolean authorize(String apiDomain, String defaultOAuthToken, String username, String password)
+    public static String authorize(String apiDomain, String defaultOAuthToken, String username, String password)
             throws UnirestException, NoSuchAlgorithmException, KeyStoreException, KeyManagementException, IOException {
         initializeUniRest();
         String urlAuthorization = getIdentityProvider(apiDomain);
@@ -100,6 +105,8 @@ public class PlatformTools {
                         .custom()
                         .loadTrustMaterial(null, new TrustSelfSignedStrategy())
                         .build();
+
+        HttpsURLConnection.setDefaultSSLSocketFactory(sslContext.getSocketFactory());
 
         CloseableHttpClient httpClient = HttpClients.custom()
                 .setSSLHostnameVerifier(new NoopHostnameVerifier())
@@ -122,7 +129,7 @@ public class PlatformTools {
         return links.getEmbedded().getProviders().get(0).getEmbeddedProvider().getRopcLdapProvider().get(0).getHref();
     }
 
-    private static boolean login(String apiDomain, String urlAuthorization, String defaultOAuthToken, String username, String password) throws UnirestException, IOException {
+    private static String login(String apiDomain, String urlAuthorization, String defaultOAuthToken, String username, String password) throws UnirestException, IOException {
         final String loginContent = String.format("grant_type=password&username=%s&password=%s", username, password);
         final String authorizationDefaultToken = String.format("Basic %s", defaultOAuthToken);
         final HttpResponse<JsonNode> loginResponse =
@@ -135,11 +142,12 @@ public class PlatformTools {
         final int loginStatusCode = loginResponse.getStatus();
         if (HttpURLConnection.HTTP_SEE_OTHER == loginStatusCode || HttpURLConnection.HTTP_OK == loginStatusCode) {
             Token token = objectMapper.readValue(loginResponse.getBody().toString(), Token.class);
-            Unirest.setDefaultHeader("Authorization", String.format("Bearer %s", token.getAccessToken()));
+            String wellFormattedAvidAccessToken = String.format("Bearer %s", token.getAccessToken());
+            Unirest.setDefaultHeader("Authorization", wellFormattedAvidAccessToken);
             keepAliveSession(apiDomain);
-            return true;
+            return wellFormattedAvidAccessToken;
         }
-        return false;
+        return null;
     }
 
     private static void keepAliveSession(String apiDomain) {
