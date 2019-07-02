@@ -86,37 +86,36 @@ public class SimpleSearchAsyncUnirest {
     }
 
     public static void main(String[] args) throws Exception {
-        if (7 != args.length || "'".equals(args[6]) || !args[6].startsWith("'") || !args[6].endsWith("'")) {
-            LOG.log(Level.INFO, "Usage: {0} <apidomain> <servicetype> <serviceversion> <realm> <username> <password> '<simplesearchexpression>'", SimpleSearchAsyncUnirest.class.getSimpleName());
+        if (6 != args.length || "'".equals(args[5]) || !args[5].startsWith("'") || !args[5].endsWith("'")) {
+            LOG.log(Level.INFO, "Usage: {0} <apidomain> <httpbasicauthstring> <servicetype> <serviceversion> <realm> '<simplesearchexpression>'", SimpleSearchAsyncUnirest.class.getSimpleName());
         } else {
             final String apiDomain = args[0];
-            final String serviceType = args[1];
-            final String serviceVersion = args[2];
-            final String realm = args[3];
-            final String username = args[4];
-            final String password = args[5];
-            final String rawSearchExpression = args[6].substring(1, args[6].length() - 1);
+            final String httpBasicAuthString = args[1];
+            final String serviceType = args[2];
+            final String serviceVersion = args[3];
+            final String realm = args[4];
+            final String rawSearchExpression = args[5].substring(1, args[5].length() - 1);
 
             final String registryServiceVersion = "0";
             final String defaultSimpleSearchUriTemplate = String.format("https://%s/apis/%s;version=%s;realm=%s/searches/simple?search={search}{&offset,limit,sort}", apiDomain, serviceType, serviceVersion, realm);
 
             PlatformToolsAsyncUnirest.authorize(apiDomain
-                    , username
-                    , password
+                    , httpBasicAuthString
                     , o -> PlatformToolsAsyncUnirest.findInRegistry(apiDomain
                             , Collections.singletonList(serviceType)
                             , registryServiceVersion
                             , "search:simple-search"
                             , defaultSimpleSearchUriTemplate,
                             it -> {
-                                final String simpleSearchUriTemplate = it.get(0);
-                                // final String simpleSearchUriTemplate = defaultSimpleSearchUriTemplate; // for debugging purposes
-                                final UriTemplate searchURITemplate = UriTemplate.fromTemplate(simpleSearchUriTemplate);
                                 URL simpleSearchFirstPageURL = null;
                                 try {
+                                    final Optional<String> simpleSearchUriTemplateCandidate = it.stream().filter(searchUrl -> searchUrl.contains(realm)).findFirst();
+                                    final String simpleSearchUriTemplate = simpleSearchUriTemplateCandidate.orElse(defaultSimpleSearchUriTemplate);
+                                    final UriTemplate searchURITemplate = UriTemplate.fromTemplate(simpleSearchUriTemplate);
+
                                     simpleSearchFirstPageURL = new URL(searchURITemplate.set("search", rawSearchExpression).expand());
                                 } catch (final IOException e) {
-                                    e.printStackTrace();
+                                    LOG.log(Level.INFO, "failure", e);
                                 }
 
                                 simpleSearchAsync(

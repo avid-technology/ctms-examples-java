@@ -52,8 +52,7 @@ public class SimpleSearchReactorUnirest {
         });
     }
 
-    private static Flux<JSONObject> simpleSearchResultsInPages(List<String> o, String rawSearchExpression, int pageSize) {
-        final String simpleSearchUriTemplate = o.get(0);
+    private static Flux<JSONObject> simpleSearchResultsInPages(String simpleSearchUriTemplate, String rawSearchExpression, int pageSize) {
         final UriTemplate searchURITemplate = UriTemplate.fromTemplate(simpleSearchUriTemplate);
         URL simpleSearchFirstPageURL = null;
         try {
@@ -121,16 +120,15 @@ public class SimpleSearchReactorUnirest {
 
 
     public static void main(String[] args) throws Exception {
-        if (7 != args.length || "'".equals(args[6]) || !args[6].startsWith("'") || !args[6].endsWith("'")) {
-            LOG.log(Level.INFO, "Usage: {0} <apidomain> <servicetype> <serviceversion> <realm> <username> <password> '<simplesearchexpression>'", SimpleSearchReactorUnirest.class.getSimpleName());
+        if (6 != args.length || "'".equals(args[5]) || !args[5].startsWith("'") || !args[5].endsWith("'")) {
+            LOG.log(Level.INFO, "Usage: {0} <apidomain> <httpbasicauthstring> <servicetype> <serviceversion> <realm> '<simplesearchexpression>'", SimpleSearchReactorUnirest.class.getSimpleName());
         } else {
             final String apiDomain = args[0];
-            final String serviceType = args[1];
-            final String serviceVersion = args[2];
-            final String realm = args[3];
-            final String username = args[4];
-            final String password = args[5];
-            final String rawSearchExpression = args[6].substring(1, args[6].length() - 1);
+            final String httpBasicAuthString = args[1];
+            final String serviceType = args[2];
+            final String serviceVersion = args[3];
+            final String realm = args[4];
+            final String rawSearchExpression = args[5].substring(1, args[5].length() - 1);
 
             final String registryServiceVersion = "0";
             final String defaultSimpleSearchUriTemplate = String.format("https://%s/apis/%s;version=%s;realm=%s/searches/simple?search={search}{&offset,limit,sort}", apiDomain, serviceType, serviceVersion, realm);
@@ -138,19 +136,21 @@ public class SimpleSearchReactorUnirest {
             // flatMap -> thenCompose
 
             PlatformToolsReactor.prepare();
-            Flux<JSONObject> thePages =  PlatformToolsReactor.getAuthEndpoint(apiDomain)
+            final Flux<JSONObject> thePages = PlatformToolsReactor.getAuthEndpoint(apiDomain)
                 .flatMap(PlatformToolsReactor::getIdentityProviders)
-                .flatMap(identityProviders -> PlatformToolsReactor.authorize(identityProviders, apiDomain, username, password))
+                .flatMap(identityProviders -> PlatformToolsReactor.authorize(identityProviders, apiDomain, httpBasicAuthString))
                 .flatMap(pass -> PlatformToolsReactor.findInRegistry(apiDomain, Collections.singletonList(serviceType), registryServiceVersion, "search:simple-search", defaultSimpleSearchUriTemplate))
-                //.flatMap(pass -> Mono.just(Collections.singletonList(defaultSimpleSearchUriTemplate))) // for debugging purposes
-                .flatMap(registeredURLs -> simpleSearchResultsInPages(registeredURLs, rawSearchExpression, /*pageSize*/ 50));
-
+                .map(o -> {
+                    final Optional<String> simpleSearchUriTemplateCandidate = o.stream().filter(searchUrl -> searchUrl.contains(realm)).findFirst();
+                    final String simpleSearchUriTemplate = simpleSearchUriTemplateCandidate.orElse(defaultSimpleSearchUriTemplate);
+                    return simpleSearchUriTemplate;
+                })
+                .flatMapMany(simpleSearchUriTemplate -> simpleSearchResultsInPages(simpleSearchUriTemplate, rawSearchExpression, /*pageSize*/ 50));
 
             thePages
                     .collect(collectPages())
                     .map(lines -> lines.third.stream().collect(Collectors.joining(String.format("%n"))))
-
-                    .doOnTerminate((eitherResult, orError) -> logout(apiDomain))
+                    .doOnTerminate(() -> logout(apiDomain))
                     .doOnError(oops -> LOG.log(Level.WARNING, "Error", oops))
                     .subscribe(it -> {
                         if (!it.isEmpty()) {

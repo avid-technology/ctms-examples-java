@@ -1,17 +1,15 @@
 package com.avid.ctms.examples.queryaggregatedattributes;
 
+import com.avid.ctms.examples.tools.common.AuthorizationResponse;
 import com.avid.ctms.examples.tools.common.PlatformTools;
 import com.damnhandy.uri.template.*;
-import com.mashape.unirest.http.exceptions.UnirestException;
+import kong.unirest.HttpResponse;
+import kong.unirest.Unirest;
 import net.sf.json.JSONArray;
 import net.sf.json.JSONObject;
 
-import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.security.KeyManagementException;
-import java.security.KeyStoreException;
-import java.security.NoSuchAlgorithmException;
 import java.util.*;
 import java.util.Formatter;
 import java.util.logging.*;
@@ -33,21 +31,19 @@ public class QueryAggregatedAttributes {
     private QueryAggregatedAttributes() {
     }
 
-    public static void main(String[] args) throws NoSuchAlgorithmException, KeyManagementException, IOException, KeyStoreException, UnirestException {
-        if (5 != args.length) {
-            LOG.log(Level.INFO, "Usage: {0} <apidomain> <oauthtoken> <serviceversion> <username> <password>", QueryAggregatedAttributes.class.getSimpleName());
+    public static void main(String[] args) throws Exception {
+        if (3 != args.length) {
+            LOG.log(Level.INFO, "Usage: {0} <apidomain> <httpbasicauthstring> <serviceversion>", QueryAggregatedAttributes.class.getSimpleName());
         } else {
             final String apiDomain = args[0];
-            final String baseOAuthToken = args[1];
+            final String httpBasicAuthString = args[1];
             final String serviceVersion = args[2];
-            final String username = args[3];
-            final String password = args[4];
 
             // Specify an IETF BCP 47 language tag, such as "en-US":
             final String lang = ""; // "" represents the default language, which is "en"
 
-            final String authorizationToken = PlatformTools.authorize(apiDomain, baseOAuthToken, username, password);
-            if (authorizationToken != null) {
+            final AuthorizationResponse authorizationResponse = PlatformTools.authorize(apiDomain, httpBasicAuthString);
+            if (authorizationResponse.getLoginResponse().map(HttpResponse::isSuccess).orElse(false)) {
                 try {
                     final String dataModelAggregatorServiceType = "avid.ctms.datamodel.aggregator";
 
@@ -61,15 +57,13 @@ public class QueryAggregatedAttributes {
 
                     /// Check, whether the service registry is available:
                     final URL aggregatedDataModelResourceURL = new URL(aggregatedDataModeUriTemplate.set("lang", lang).expand());
-                    final HttpURLConnection aggregatedDataModelResourceConnection = (HttpURLConnection) aggregatedDataModelResourceURL.openConnection();
-                    aggregatedDataModelResourceConnection.setConnectTimeout(PlatformTools.getDefaultConnectionTimeoutms());
-                    aggregatedDataModelResourceConnection.setReadTimeout(PlatformTools.getDefaultReadTimeoutms());
-                    aggregatedDataModelResourceConnection.setRequestProperty("Accept", "application/hal+json");
-                    aggregatedDataModelResourceConnection.setRequestProperty("Authorization", authorizationToken);
 
-                    final int aggregatedDataModelStatus = aggregatedDataModelResourceConnection.getResponseCode();
+                    final HttpResponse<String> response
+                            = Unirest.get(aggregatedDataModelResourceURL.toString()).asString();
+
+                    final int aggregatedDataModelStatus = response.getStatus();
                     if (HttpURLConnection.HTTP_OK == aggregatedDataModelStatus) {
-                        final String rawAggregatedDataModelResult = PlatformTools.getContent(aggregatedDataModelResourceConnection);
+                        final String rawAggregatedDataModelResult = response.getBody();
                         final JSONObject aggregatedDataModelResult = JSONObject.fromObject(rawAggregatedDataModelResult);
 
                         final JSONObject attributes = aggregatedDataModelResult.getJSONObject("attributes");
@@ -103,7 +97,7 @@ public class QueryAggregatedAttributes {
                             LOG.log(Level.INFO, "No attributes found.");
                         }
                     } else {
-                        LOG.log(Level.SEVERE, "Problem accessing <{0}>: {1}", new Object[]{aggregatedDataModelResourceURL, PlatformTools.getContent(aggregatedDataModelResourceConnection)});
+                        LOG.log(Level.SEVERE, "Problem accessing <{0}> - {1}", new Object[]{aggregatedDataModelResourceURL, response.getStatusText()});
                     }
                 } catch (final Exception exception) {
                     LOG.log(Level.SEVERE, "failure", exception);

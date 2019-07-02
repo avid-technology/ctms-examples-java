@@ -5,11 +5,10 @@ import java.net.*;
 import java.util.*;
 import java.util.logging.*;
 
+import com.avid.ctms.examples.tools.common.AuthorizationResponse;
 import com.avid.ctms.examples.tools.common.ItemInfo;
 import com.avid.ctms.examples.tools.common.PlatformTools;
-import com.avid.ctms.examples.tools.unirest.PlatformToolsUnirest;
-import com.mashape.unirest.http.*;
-import com.mashape.unirest.http.exceptions.UnirestException;
+import kong.unirest.*;
 
 import javax.ws.rs.core.UriBuilder;
 
@@ -81,7 +80,7 @@ public class FolderOperationsUnirest {
     }
 
     private static void performFolderOperations(ItemInfo parentItem) throws IOException, UnirestException {
-        final String now = PlatformTools.nowFormatted().replaceAll("[\\-\\.:\\s\\+]", "_");
+        final String now = PlatformTools.nowFormatted().replaceAll("[\\-.:\\s+]", "_");
         final String newFolderName = "Java_Unirest_Example_Folder_" + now;
         final String newFolderDescription = "{\"common\": {\"name\": \"" + newFolderName + "\"}}";
 
@@ -110,25 +109,24 @@ public class FolderOperationsUnirest {
     }
 
     public static void main(String[] args) throws Exception {
-        if (6 != args.length) {
-            LOG.log(Level.INFO, "Usage: {0} <apidomain> <servicetype> <serviceversion> <realm> <username> <password>", FolderOperationsUnirest.class.getSimpleName());
+        if (5 != args.length) {
+            LOG.log(Level.INFO, "Usage: {0} <apidomain> <httpbasicauthstring> <servicetype> <serviceversion> <realm>", FolderOperationsUnirest.class.getSimpleName());
         } else {
             final String apiDomain = args[0];
-            final String serviceType = args[1];
-            final String serviceVersion = args[2];
-            final String realm = args[3];
-            final String username = args[4];
-            final String password = args[5];
+            final String httpBasicAuthString = args[1];
+            final String serviceType = args[2];
+            final String serviceVersion = args[3];
+            final String realm = args[4];
 
-            final boolean successfullyAuthorized = PlatformToolsUnirest.authorize(apiDomain, username, password);
-            if (successfullyAuthorized) {
+            final AuthorizationResponse authorizationResponse = PlatformTools.authorize(apiDomain, httpBasicAuthString);
+            if (authorizationResponse.getLoginResponse().map(HttpResponse::isSuccess).orElse(false)) {
                 /// Query CTMS Registry:
                 final String registryServiceVersion = "0";
                 final String locationsUriTemplate = String.format("https://%s/apis/%s;version=%s;realm=%s/locations", apiDomain, serviceType, serviceVersion, realm);
-                final List<String> locationsUriTemplates = PlatformToolsUnirest.findInRegistry(apiDomain, Collections.singletonList(serviceType), registryServiceVersion, "loc:locations", locationsUriTemplate);
+                final List<String> locationsUriTemplates = PlatformTools.findInRegistry(apiDomain, Collections.singletonList(serviceType), registryServiceVersion, "loc:locations", locationsUriTemplate);
                 final String urlLocations = locationsUriTemplates.get(0);
 
-                performItemOperations(urlLocations);
+                //performItemOperations(urlLocations);
 
                 try {
                     /// Check presence of the locations resource and continue with HATEOAS:
@@ -163,7 +161,7 @@ public class FolderOperationsUnirest {
                 } catch (final Exception exception) {
                     LOG.log(Level.SEVERE, "failure", exception);
                 } finally {
-                    PlatformToolsUnirest.logout(apiDomain);
+                    PlatformTools.logout(apiDomain);
                 }
             } else {
                 LOG.log(Level.INFO, "Authorization failed.");

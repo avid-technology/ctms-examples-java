@@ -1,40 +1,35 @@
 package com.avid.ctms.examples.tools.common;
 
+import com.avid.ctms.examples.tools.common.data.LinkProperty;
 import com.avid.ctms.examples.tools.common.data.Links;
 import com.avid.ctms.examples.tools.common.data.token.Token;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.mashape.unirest.http.HttpResponse;
-import com.mashape.unirest.http.JsonNode;
-import com.mashape.unirest.http.Unirest;
-import com.mashape.unirest.http.exceptions.UnirestException;
+import kong.unirest.*;
 import net.sf.json.JSONArray;
 import net.sf.json.JSONObject;
+import org.apache.http.HttpHost;
+import org.apache.http.client.config.CookieSpecs;
+import org.apache.http.client.config.RequestConfig;
 import org.apache.http.conn.ssl.NoopHostnameVerifier;
 import org.apache.http.conn.ssl.TrustSelfSignedStrategy;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
+import org.apache.http.impl.nio.client.CloseableHttpAsyncClient;
+import org.apache.http.impl.nio.client.HttpAsyncClients;
 
-import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLContext;
-import javax.net.ssl.TrustManager;
-import javax.net.ssl.X509TrustManager;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
-import java.net.URL;
+import java.net.*;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyManagementException;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
-import java.security.SecureRandom;
-import java.security.cert.X509Certificate;
 import java.time.Instant;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -54,8 +49,8 @@ import java.util.logging.Logger;
  * A set of tooling methods.
  */
 public class PlatformTools {
-
     private static final Logger LOG = Logger.getLogger(PlatformTools.class.getName());
+
     private static final ObjectMapper objectMapper = new ObjectMapper();
     private static ScheduledExecutorService scheduler;
     private static ScheduledFuture<?> sessionRefresher;
@@ -82,84 +77,138 @@ public class PlatformTools {
     }
 
     /**
-     * MCUX-identity-provider based authorization via credentials and cookies.
+     * OAuth2-identity-provider based authorization via an HTTP Basic Auth String.
      * The used server-certificate validation is tolerant. As a side effect the global cookie handler is configured in a
      * way to refer a set of cookies, which are required for the communication with the platform.
      *
-     * @param apiDomain         address to get "auth"
-     * @param defaultOAuthToken default oauth2 api token
-     * @param username          MCUX login
-     * @param password          MCUX password
+     * @param apiDomain             address to get "auth"
+     * @param httpBasicAuthString   HTTP basic Auth String
      * @return authorization token as string or null if authorization process failed.
      */
-    public static String authorize(String apiDomain, String defaultOAuthToken, String username, String password)
-            throws UnirestException, NoSuchAlgorithmException, KeyStoreException, KeyManagementException, IOException {
+    public static AuthorizationResponse authorize(String apiDomain, String httpBasicAuthString)
+            throws Exception {
         initializeUniRest();
-        String urlAuthorization = getIdentityProvider(apiDomain);
-        return login(apiDomain, urlAuthorization, defaultOAuthToken, username, password);
+        final String urlAuthorization = getIdentityProvider(apiDomain);
+        return login(urlAuthorization, httpBasicAuthString);
     }
 
-    private static void initializeUniRest() throws KeyStoreException, NoSuchAlgorithmException, KeyManagementException {
-        final SSLContext sslContext =
-                org.apache.http.ssl.SSLContexts
-                        .custom()
-                        .loadTrustMaterial(null, new TrustSelfSignedStrategy())
-                        .build();
-
-        HttpsURLConnection.setDefaultSSLSocketFactory(sslContext.getSocketFactory());
-
-        CloseableHttpClient httpClient = HttpClients.custom()
-                .setSSLHostnameVerifier(new NoopHostnameVerifier())
-                .setSSLContext(sslContext)
-                .setConnectionTimeToLive(getDefaultConnectionTimeoutms(), TimeUnit.MILLISECONDS)
+    public static void initializeUniRest() throws KeyStoreException, NoSuchAlgorithmException, KeyManagementException {
+        final SSLContext sslContext
+                = org.apache.http.ssl.SSLContexts
+                .custom()
+                .loadTrustMaterial(null, TrustSelfSignedStrategy.INSTANCE)
                 .build();
 
-        Unirest.setHttpClient(httpClient);
-        Unirest.setDefaultHeader("Accept", "application/json");
+        final String proxyHost = System.getProperty("https.proxyHost");
+        final String proxyPort = System.getProperty("https.proxyPort");
+
+        if (null != proxyHost) {
+            LOG.log(Level.INFO, "using proxy: {0}, port: {1}", new Object [] {proxyHost, proxyPort});
+        }
+
+        Unirest.config()
+                .reset()
+                .verifySsl(false)
+                .proxy((null != proxyHost) ? new kong.unirest.Proxy(proxyHost, Integer.parseInt(proxyPort)) : null);
+
+        final RequestConfig requestConfig
+                = RequestConfig.custom()
+                .setCookieSpec(CookieSpecs.STANDARD)
+                .setProxy((null != proxyHost) ? new HttpHost(proxyHost, Integer.parseInt(proxyPort)) : null)
+                .build();
+
+        final CloseableHttpAsyncClient httpAsyncClient
+                = HttpAsyncClients
+                .custom()
+                .disableCookieManagement()
+                .setDefaultRequestConfig(requestConfig)
+                .setSSLHostnameVerifier(NoopHostnameVerifier.INSTANCE)
+                .setSSLContext(sslContext)
+                .build();
+        Unirest.config().asyncClient(httpAsyncClient);
+
+        final CloseableHttpClient httpClient
+                = HttpClients
+                .custom()
+                .disableCookieManagement()
+                .disableRedirectHandling()
+                .setDefaultRequestConfig(requestConfig)
+                .setSSLHostnameVerifier(NoopHostnameVerifier.INSTANCE)
+                .setSSLContext(sslContext)
+                .build();
+        Unirest.config().httpClient(httpClient);
     }
 
-    private static String getIdentityProvider(String apiDomain) throws UnirestException, IOException {
-        HttpResponse<JsonNode> jsonNodeHttpResponse = Unirest.get(String.format("https://%s/auth/", apiDomain))
+    private static String getIdentityProvider(String authEndpoint) throws Exception {
+        final HttpResponse<JsonNode> jsonNodeHttpResponse
+                = Unirest
+                .get(String.format("https://%s/auth", authEndpoint))
                 .asJson();
-        JsonNode body = jsonNodeHttpResponse.getBody();
-        String identityProviderHref = objectMapper.readValue(body.toString(), Links.class).getLinks().getIdentityProviders().get(0).getHref();
+        final JsonNode body = jsonNodeHttpResponse.getBody();
+        final String identityProviderHref = objectMapper.readValue(body.toString(), Links.class).getLinks().getIdentityProviders().get(0).getHref();
 
-        String identityProviders = Unirest.get(identityProviderHref).asJson().getBody().toString();
-        Links links = objectMapper.readValue(identityProviders, Links.class);
-        return links.getEmbedded().getProviders().get(0).getEmbeddedProvider().getRopcLdapProvider().get(0).getHref();
+        final String identityProviders
+                = Unirest
+                .get(identityProviderHref)
+                .asJson()
+                .getBody()
+                .toString();
+        final Links links = objectMapper.readValue(identityProviders, Links.class);
+
+        final Optional<String> ropcDefaultIdentityProviderURL
+                = links.getEmbedded().getProviders()
+                .stream()
+                .filter(Objects::nonNull)
+                .map(it -> it.getEmbeddedProvider().getRopcDefaultProvider())
+                .filter(Objects::nonNull)
+                .flatMap(List::stream)
+                .map(LinkProperty::getHref)
+                .findFirst();
+
+        if (!ropcDefaultIdentityProviderURL.isPresent()) {
+            throw new Exception("No ropc-default-identity-provider found.");
+        }
+
+        return ropcDefaultIdentityProviderURL.get();
     }
 
-    private static String login(String apiDomain, String urlAuthorization, String defaultOAuthToken, String username, String password) throws UnirestException, IOException {
-        final String loginContent = String.format("grant_type=password&username=%s&password=%s", username, password);
-        final String authorizationDefaultToken = String.format("Basic %s", defaultOAuthToken);
-        final HttpResponse<JsonNode> loginResponse =
-                Unirest.post(urlAuthorization)
-                        .header("Content-Type", "application/x-www-form-urlencoded")
-                        .header("Authorization", authorizationDefaultToken)
-                        .body(loginContent)
-                        .asJson();
+    private static AuthorizationResponse login(String urlAuthorization, String httpBasicAuthString) throws IOException {
+        Unirest.config().clearDefaultHeaders();
+        Unirest.config().setDefaultHeader("Accept", "application/json");
+
+        final String loginContent = "grant_type=client_credentials&scope=openid";
+        final String authorizationDefaultToken = String.format("Basic %s", httpBasicAuthString);
+        final HttpResponse<JsonNode> loginResponse
+                = Unirest
+                .post(urlAuthorization)
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .header("Authorization", authorizationDefaultToken)
+                .body(loginContent)
+                .asJson();
 
         final int loginStatusCode = loginResponse.getStatus();
-        if (HttpURLConnection.HTTP_SEE_OTHER == loginStatusCode || HttpURLConnection.HTTP_OK == loginStatusCode) {
-            Token token = objectMapper.readValue(loginResponse.getBody().toString(), Token.class);
-            String wellFormattedAvidAccessToken = String.format("Bearer %s", token.getAccessToken());
-            Unirest.setDefaultHeader("Authorization", wellFormattedAvidAccessToken);
-            keepAliveSession(apiDomain);
-            return wellFormattedAvidAccessToken;
+        if (HttpURLConnection.HTTP_OK == loginStatusCode || HttpURLConnection.HTTP_SEE_OTHER == loginStatusCode) {
+            final Token token = objectMapper.readValue(loginResponse.getBody().toString(), Token.class);
+            final String idToken = token.isOpenIdConnectEnabled() ? token.getIdToken() : token.getAccessToken();
+            final String accessTokenHeaderFieldValue = String.format("Bearer %s", idToken);
+
+            Unirest.config().setDefaultHeader("Authorization", accessTokenHeaderFieldValue);
+            initializeSessionRefresher(urlAuthorization);
+            return new AuthorizationResponse(accessTokenHeaderFieldValue, loginResponse);
         }
-        return null;
+        return new AuthorizationResponse(null, loginResponse);
     }
 
-    private static void keepAliveSession(String apiDomain) {
+    private static void initializeSessionRefresher(String apiDomain) {
         scheduler = Executors.newScheduledThreadPool(1);
         final Runnable sessionRefresher = () -> {
             try {
                 sendKeepAliveRequest(apiDomain);
-            } catch (UnirestException e) {
+            } catch (final UnirestException | IOException e) {
                 LOG.log(Level.SEVERE, "Session refresher error", e);
             }
         };
-        final long refreshPeriodSeconds = 12;
+        final long refreshPeriodSeconds = 120;
         PlatformTools.sessionRefresher = scheduler.scheduleAtFixedRate(sessionRefresher, refreshPeriodSeconds, refreshPeriodSeconds, TimeUnit.SECONDS);
     }
 
@@ -169,9 +218,28 @@ public class PlatformTools {
      * @param apiDomain address against to which we want send a keep alive signal
      * @throws UnirestException
      */
-    private static void sendKeepAliveRequest(String apiDomain) throws UnirestException {
-        Unirest.post(String.format("https://%s/auth/tokens/current/extension", apiDomain))
+    private static void sendKeepAliveRequest(String apiDomain) throws UnirestException, IOException {
+        final HttpResponse<JsonNode> jsonNodeHttpResponse
+                = Unirest
+                .get(String.format("https://%s/auth/", apiDomain))
                 .asJson();
+        final Links links = objectMapper.readValue(jsonNodeHttpResponse.getBody().toString(), Links.class);
+
+        final String urlCurrentToken = links.getLinks().getToken().get(0).getHref();
+        Unirest.get(urlCurrentToken)
+                .asStringAsync()
+                .thenApply(it -> {
+                    final JSONObject currentTokenResult = JSONObject.fromObject(it.getBody());
+                    final String urlExtend = currentTokenResult
+                            .getJSONObject("_links")
+                            .getJSONArray("auth-token:extend")
+                            .getJSONObject(0)
+                            .get("href")
+                            .toString();
+                    return urlExtend;
+                }).thenAccept(it -> {
+                    Unirest.post(it).asEmpty();
+                });
     }
 
     /**
@@ -179,21 +247,20 @@ public class PlatformTools {
      *
      * @param apiDomain address against to which we want to logout
      * @throws IOException
-     * @throws UnirestException
      */
-    public static void logout(String apiDomain) throws UnirestException, IOException {
+    public static void logout(String apiDomain) throws IOException {
         callRemoveTokenRequest(apiDomain);
         removeSessionKeepAlive();
     }
 
-    private static void callRemoveTokenRequest(String apiDomain) throws UnirestException, IOException {
-        HttpResponse<JsonNode> jsonNodeHttpResponse = Unirest.get(String.format("https://%s/auth/", apiDomain))
+    private static void callRemoveTokenRequest(String apiDomain) throws IOException {
+        final HttpResponse<JsonNode> jsonNodeHttpResponse = Unirest.get(String.format("https://%s/auth/", apiDomain))
                 .asJson();
-        Links links = objectMapper.readValue(jsonNodeHttpResponse.getBody().toString(), Links.class);
-        String currentTokenRemovalUrl = links.getLinks().getToken().get(0).getHref();
+        final Links links = objectMapper.readValue(jsonNodeHttpResponse.getBody().toString(), Links.class);
+        final String currentTokenRemovalUrl = links.getLinks().getToken().get(0).getHref();
         Unirest.delete(currentTokenRemovalUrl)
                 .header("Accept", "application/json")
-                .asJson();
+                .asEmpty();
     }
 
     private static void removeSessionKeepAlive() {
@@ -220,16 +287,15 @@ public class PlatformTools {
     public static List<String> findInRegistry(String apiDomain, List<String> serviceTypes, String registryServiceVersion, String resourceName, String orDefaultUriTemplate) throws IOException {
         try {
             /// Check, whether the service registry is available:
-            final URL serviceRootsResourceURL = new URL(String.format("https://%s/apis/avid.ctms.registry;version=%s/serviceroots", apiDomain, registryServiceVersion));
-            final HttpURLConnection serviceRootsResourceConnection = (HttpURLConnection) serviceRootsResourceURL.openConnection();
-            serviceRootsResourceConnection.setConnectTimeout(PlatformTools.getDefaultConnectionTimeoutms());
-            serviceRootsResourceConnection.setReadTimeout(PlatformTools.getDefaultReadTimeoutms());
-            serviceRootsResourceConnection.setRequestProperty("Accept", "application/hal+json");
+            final HttpResponse<String> response
+                    = Unirest
+                    .get(String.format("https://%s/apis/avid.ctms.registry;version=%s/serviceroots", apiDomain, registryServiceVersion))
+                    .asString();
 
-            final int serviceRootsStatus = serviceRootsResourceConnection.getResponseCode();
+            final int serviceRootsStatus = response.getStatus();
             if (HttpURLConnection.HTTP_OK == serviceRootsStatus) {
                 /// Doing the registry lookup and write the results to stdout:
-                final String rawServiceRootsResult = PlatformTools.getContent(serviceRootsResourceConnection);
+                final String rawServiceRootsResult = response.getBody();
                 final JSONObject serviceRootsResult = JSONObject.fromObject(rawServiceRootsResult);
 
                 final JSONObject resources = serviceRootsResult.getJSONObject("resources");
@@ -282,11 +348,27 @@ public class PlatformTools {
         return Collections.singletonList(orDefaultUriTemplate);
     }
 
+    public static String URLencode(String in) {
+        try {
+            return URLEncoder.encode(Objects.toString(in, ""), StandardCharsets.UTF_8.toString());
+        } catch (final Exception exc) {
+            return "";
+        }
+    }
+
+    public static String URLdecode(String in) {
+        try {
+            return URLDecoder.decode(Objects.toString(in, ""), StandardCharsets.UTF_8.toString());
+        } catch (final Exception exc) {
+            return "";
+        }
+    }
+
     /**
      * Reads the content of the buffer of the input stream or error stream read from the passed HttpURLConnection, puts
      * it into a String and returns that String.
      *
-     * @param urlConnection the URLConnection to retrieve the content from.
+     * @param urlConnection the HttpURLConnection to retrieve the content from.
      * @return the content of the buffer of the InputStream read from the passed URLConnection
      * @throws IOException
      */

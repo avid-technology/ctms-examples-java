@@ -1,7 +1,10 @@
 package com.avid.ctms.examples.orchestration.queryprocesses;
 
+import com.avid.ctms.examples.tools.common.AuthorizationResponse;
 import com.avid.ctms.examples.tools.common.PlatformTools;
 import com.damnhandy.uri.template.UriTemplate;
+import kong.unirest.HttpResponse;
+import kong.unirest.Unirest;
 import net.sf.json.JSONArray;
 import net.sf.json.JSONObject;
 
@@ -29,19 +32,17 @@ public class QueryProcesses {
     }
 
     public static void main(String[] args) throws Exception {
-        if (7 != args.length || "'".equals(args[6]) || !args[6].startsWith("'") || !args[6].endsWith("'")) {
-            LOG.log(Level.INFO, "Usage: {0} <apidomain> <oauthtoken> <serviceversion> <realm> <username> <password> '<simplesearchexpression>'", QueryProcesses.class.getSimpleName());
+        if (5 != args.length || "'".equals(args[4]) || !args[4].startsWith("'") || !args[4].endsWith("'")) {
+            LOG.log(Level.INFO, "Usage: {0} <apidomain> <httpbasicauthstring> <serviceversion> <realm> '<simplesearchexpression>'", QueryProcesses.class.getSimpleName());
         } else {
             final String apiDomain = args[0];
-            final String baseOAuthToken = args[1];
+            final String httpBasicAuthString = args[1];
             final String serviceVersion = args[2];
             final String realm = args[3];
-            final String username = args[4];
-            final String password = args[5];
-            final String rawSearchExpression = args[6].substring(1, args[6].length() - 1);
+            final String rawSearchExpression = args[4].substring(1, args[4].length() - 1);
 
-            final String authorizationToken = PlatformTools.authorize(apiDomain, baseOAuthToken, username, password);
-            if (authorizationToken != null) {
+            final AuthorizationResponse authorizationResponse = PlatformTools.authorize(apiDomain, httpBasicAuthString);
+            if (authorizationResponse.getLoginResponse().map(HttpResponse::isSuccess).orElse(false)) {
                 try {
                     final String orchestrationServiceType = "avid.orchestration.ctc";
 
@@ -54,22 +55,16 @@ public class QueryProcesses {
                     /// Doing the process query and write the results to stdout:
                     final UriTemplate processQueryURITemplate = UriTemplate.fromTemplate(processQueryUriTemplates.get(0));
                     final URL processQueryURL = new URL(processQueryURITemplate.expand());
-
-
                     // Create and send the process query's description:
                     final String queryExpression = String.format("<query version='1.0'><search><quick>%s</quick></search></query>", rawSearchExpression);
                     final String queryContent = new JSONObject().accumulate("query", queryExpression).toString();
-                    HttpURLConnection processQueryResultPageConnection = (HttpURLConnection) processQueryURL.openConnection();
-                    processQueryResultPageConnection.setConnectTimeout(PlatformTools.getDefaultConnectionTimeoutms());
-                    processQueryResultPageConnection.setReadTimeout(PlatformTools.getDefaultReadTimeoutms());
-                    processQueryResultPageConnection.setRequestMethod("POST");
-                    processQueryResultPageConnection.setDoOutput(true);
-                    processQueryResultPageConnection.setRequestProperty("Content-Type", "application/json");
-                    processQueryResultPageConnection.setRequestProperty("Accept", "application/hal+json");
-                    processQueryResultPageConnection.setRequestProperty("Authorization", authorizationToken);
-                    processQueryResultPageConnection.getOutputStream().write(queryContent.getBytes());
+                    HttpResponse<String> processQueryResponse
+                            = Unirest.post(processQueryURL.toString())
+                            .header("Content-Type", "application/json")
+                            .body(queryContent)
+                            .asString();
 
-                    final int processQueryStatus = processQueryResultPageConnection.getResponseCode();
+                    final int processQueryStatus = processQueryResponse.getStatus();
                     if (HttpURLConnection.HTTP_OK == processQueryStatus) {
                         int assetNo = 0;
                         int pageNo = 0;
@@ -77,7 +72,7 @@ public class QueryProcesses {
                         final StringBuilder sb = new StringBuilder();
                         try (final Formatter formatter = new Formatter(sb)) {
                             do {
-                                final String rawProcessQueryPageResult = PlatformTools.getContent(processQueryResultPageConnection);
+                                final String rawProcessQueryPageResult = processQueryResponse.getBody();
                                 final JSONObject processQueryPageResult = JSONObject.fromObject(rawProcessQueryPageResult);
                                 final JSONObject embeddedResults = (JSONObject) processQueryPageResult.get("_embedded");
                                 // Do we have results:
@@ -101,13 +96,11 @@ public class QueryProcesses {
                                 // If we have more results, follow the next link and get the next page:
                                 final JSONObject linkToNextPage = (JSONObject) processQueryPageResult.getJSONObject("_links").get("next");
                                 if (null != linkToNextPage) {
-                                    processQueryResultPageConnection = (HttpURLConnection) new URL(linkToNextPage.getString("href")).openConnection();
-                                    processQueryResultPageConnection.setConnectTimeout(PlatformTools.getDefaultConnectionTimeoutms());
-                                    processQueryResultPageConnection.setReadTimeout(PlatformTools.getDefaultReadTimeoutms());
+                                    processQueryResponse = Unirest.get(linkToNextPage.getString("href")).asString();
                                 } else {
-                                    processQueryResultPageConnection = null;
+                                    processQueryResponse = null;
                                 }
-                            } while (null != processQueryResultPageConnection);
+                            } while (null != processQueryResponse);
 
                             LOG.log(Level.INFO, sb::toString);
                         }

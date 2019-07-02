@@ -1,9 +1,14 @@
 package com.avid.ctms.examples.advancedsearch;
 
+import com.avid.ctms.examples.tools.common.AuthorizationResponse;
 import com.avid.ctms.examples.tools.common.PlatformTools;
 import com.damnhandy.uri.template.UriTemplate;
+import kong.unirest.HttpResponse;
+import kong.unirest.JsonNode;
+import kong.unirest.Unirest;
 import net.sf.json.JSONArray;
 import net.sf.json.JSONObject;
+import reactor.util.function.Tuple2;
 
 import java.io.*;
 import java.net.HttpURLConnection;
@@ -38,21 +43,19 @@ public class AdvancedSearch {
     }
 
     public static void main(String[] args) throws Exception {
-        if (8 != args.length) {
-            LOG.log(Level.INFO, "Usage: {0} <apidomain> <oauthtoken> <servicetype> <serviceversion> <realm> <username> <password> <advancedsearchdescriptionfilename>", AdvancedSearch.class.getSimpleName());
+        if (6 != args.length) {
+            LOG.log(Level.INFO, "Usage: {0} <apidomain> <httpbasicauthstring> <servicetype> <serviceversion> <realm> <advancedsearchdescriptionfilename>", AdvancedSearch.class.getSimpleName());
         } else {
             final String apiDomain = args[0];
-            final String baseOAuthToken = args[1];
+            final String httpBasicAuthString = args[1];
             final String serviceType = args[2];
             final String serviceVersion = args[3];
             final String realm = args[4];
-            final String username = args[5];
-            final String password = args[6];
-            final Path advancedSearchDescriptionFilePath = Paths.get(args[7]);
+            final Path advancedSearchDescriptionFilePath = Paths.get(args[5]);
 
             if (advancedSearchDescriptionFilePath.toFile().exists()) {
-                final String authorizationToken = PlatformTools.authorize(apiDomain, baseOAuthToken, username, password);
-                if (authorizationToken != null) {
+                final AuthorizationResponse authorizationResponse = PlatformTools.authorize(apiDomain, httpBasicAuthString);
+                if (authorizationResponse.getLoginResponse().map(HttpResponse::isSuccess).orElse(false)) {
                     try {
                         /// Query CTMS Registry:
                         final String registryServiceVersion = "0";
@@ -61,15 +64,12 @@ public class AdvancedSearch {
 
                         /// Check, whether advanced search is supported:
                         URL searchesResourceURL = new URL(advancedSearchUriTemplates.get(0));
-                        final HttpURLConnection searchesResourceConnection = (HttpURLConnection) searchesResourceURL.openConnection();
-                        searchesResourceConnection.setConnectTimeout(PlatformTools.getDefaultConnectionTimeoutms());
-                        searchesResourceConnection.setReadTimeout(PlatformTools.getDefaultReadTimeoutms());
-                        searchesResourceConnection.setRequestProperty("Accept", "application/hal+json");
-                        searchesResourceConnection.setRequestProperty("Authorization", authorizationToken);
 
-                        final int searchesStatus = searchesResourceConnection.getResponseCode();
+                        final HttpResponse<String> response = Unirest.get(searchesResourceURL.toString()).asString();
+
+                        final int searchesStatus = response.getStatus();
                         if (HttpURLConnection.HTTP_OK == searchesStatus) {
-                            final String rawSearchesResult = PlatformTools.getContent(searchesResourceConnection);
+                            final String rawSearchesResult = response.getBody();
                             final JSONObject searchesResult = JSONObject.fromObject(rawSearchesResult);
                             final Object advancedSearchLinkObject = searchesResult.getJSONObject("_links").get("search:advanced-search");
                             // Is advanced search supported?
@@ -81,17 +81,14 @@ public class AdvancedSearch {
 
                                 // Create and send the process query's description:
                                 final String advancedSearchDescription = removeUTF8BOM(new String(Files.readAllBytes(advancedSearchDescriptionFilePath), Charset.forName("UTF-8")));
-                                HttpURLConnection advancedSearchPageConnection = (HttpURLConnection) advancedSearchResultPageURL.openConnection();
-                                advancedSearchPageConnection.setConnectTimeout(PlatformTools.getDefaultConnectionTimeoutms());
-                                advancedSearchPageConnection.setReadTimeout(PlatformTools.getDefaultReadTimeoutms());
-                                advancedSearchPageConnection.setRequestMethod("POST");
-                                advancedSearchPageConnection.setDoOutput(true);
-                                advancedSearchPageConnection.setRequestProperty("Content-Type", "application/json");
-                                advancedSearchPageConnection.setRequestProperty("Accept", "application/hal+json");
-                                advancedSearchPageConnection.setRequestProperty("Authorization", authorizationToken);
-                                advancedSearchPageConnection.getOutputStream().write(advancedSearchDescription.getBytes());
 
-                                final int advancedSearchStatus = advancedSearchPageConnection.getResponseCode();
+                                HttpResponse<String> advancedSearchResponse
+                                        = Unirest.post(advancedSearchResultPageURL.toString())
+                                        .header("Content-Type", "application/json")
+                                        .body(advancedSearchDescription)
+                                        .asString();
+
+                                final int advancedSearchStatus = advancedSearchResponse.getStatus();
                                 if (HttpURLConnection.HTTP_OK == advancedSearchStatus) {
                                     int assetNo = 0;
                                     int pageNo = 0;
@@ -99,7 +96,7 @@ public class AdvancedSearch {
                                     final StringBuilder sb = new StringBuilder();
                                     try (final Formatter formatter = new Formatter(sb)) {
                                         do {
-                                            final String rawProcessQueryPageResult = PlatformTools.getContent(advancedSearchPageConnection);
+                                            final String rawProcessQueryPageResult = advancedSearchResponse.getBody();
                                             final JSONObject processQueryPageResult = JSONObject.fromObject(rawProcessQueryPageResult);
                                             final JSONObject embeddedResults = (JSONObject) processQueryPageResult.get("_embedded");
                                             // Do we have results:
@@ -124,20 +121,18 @@ public class AdvancedSearch {
                                             }
 
                                             if (null != linkToNextPage) {
-                                                advancedSearchPageConnection = (HttpURLConnection) new URL(linkToNextPage.getString("href")).openConnection();
-                                                advancedSearchPageConnection.setConnectTimeout(PlatformTools.getDefaultConnectionTimeoutms());
-                                                advancedSearchPageConnection.setReadTimeout(PlatformTools.getDefaultReadTimeoutms());
+                                                advancedSearchResponse = Unirest.get(linkToNextPage.getString("href")).asString();
                                             } else {
-                                                advancedSearchPageConnection = null;
+                                                advancedSearchResponse = null;
                                             }
-                                        } while (null != advancedSearchPageConnection);
+                                        } while (null != advancedSearchResponse);
                                     }
 
                                     LOG.log(Level.INFO, sb::toString);
                                 }
                             }
                         } else {
-                            LOG.log(Level.INFO, "Failure accessing service. -> {0}", PlatformTools.getContent(searchesResourceConnection));
+                            LOG.log(Level.INFO, "Failure accessing service. - {0}", response.getStatusText());
                         }
                     } catch (final Exception exception) {
                         LOG.log(Level.SEVERE, "failure", exception);

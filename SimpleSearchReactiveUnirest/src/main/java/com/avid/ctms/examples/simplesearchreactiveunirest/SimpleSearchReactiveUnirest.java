@@ -101,16 +101,15 @@ public class SimpleSearchReactiveUnirest {
     }
 
     public static void main(String[] args) throws Exception {
-        if (7 != args.length || "'".equals(args[6]) || !args[6].startsWith("'") || !args[6].endsWith("'")) {
-            LOG.log(Level.INFO, "Usage: {0} <apidomain> <servicetype> <serviceversion> <realm> <username> <password> '<simplesearchexpression>'", SimpleSearchReactiveUnirest.class.getSimpleName());
+        if (6 != args.length || "'".equals(args[5]) || !args[5].startsWith("'") || !args[5].endsWith("'")) {
+            LOG.log(Level.INFO, "Usage: {0} <apidomain> <httpbasicauthstring> <servicetype> <serviceversion> <realm> '<simplesearchexpression>'", SimpleSearchReactiveUnirest.class.getSimpleName());
         } else {
             final String apiDomain = args[0];
-            final String serviceType = args[1];
-            final String serviceVersion = args[2];
-            final String realm = args[3];
-            final String username = args[4];
-            final String password = args[5];
-            final String rawSearchExpression = args[6].substring(1, args[6].length() - 1);
+            final String httpBasicAuthString = args[1];
+            final String serviceType = args[2];
+            final String serviceVersion = args[3];
+            final String realm = args[4];
+            final String rawSearchExpression = args[5].substring(1, args[5].length() - 1);
 
             final String registryServiceVersion = "0";
             final String defaultSimpleSearchUriTemplate = String.format("https://%s/apis/%s;version=%s;realm=%s/searches/simple?search={search}{&offset,limit,sort}", apiDomain, serviceType, serviceVersion, realm);
@@ -119,14 +118,16 @@ public class SimpleSearchReactiveUnirest {
                     .runAsync(PlatformToolsReactiveUnirest::prepare)
                     .thenCompose(o -> PlatformToolsReactiveUnirest.getAuthEndpoint(apiDomain))
                     .thenCompose(PlatformToolsReactiveUnirest::getIdentityProviders)
-                    .thenCompose(response -> PlatformToolsReactiveUnirest.authorize(response, apiDomain, username, password))
+                    .thenCompose(response -> PlatformToolsReactiveUnirest.authorize(response, apiDomain, httpBasicAuthString))
                     .thenCompose(o -> PlatformToolsReactiveUnirest.findInRegistry(apiDomain, Collections.singletonList(serviceType), registryServiceVersion, "search:simple-search", defaultSimpleSearchUriTemplate))
                     // .thenApply(o -> Collections.singletonList(defaultSimpleSearchUriTemplate)) // for debugging purposes
                     .thenApplyAsync(o -> {
-                        final String simpleSearchUriTemplate = o.get(0);
-                        final UriTemplate searchURITemplate = UriTemplate.fromTemplate(simpleSearchUriTemplate);
                         URL simpleSearchFirstPageURL = null;
                         try {
+                            final Optional<String> simpleSearchUriTemplateCandidate = o.stream().filter(searchUrl -> searchUrl.contains(realm)).findFirst();
+                            final String simpleSearchUriTemplate = simpleSearchUriTemplateCandidate.orElse(defaultSimpleSearchUriTemplate);
+                            final UriTemplate searchURITemplate = UriTemplate.fromTemplate(simpleSearchUriTemplate);
+
                             simpleSearchFirstPageURL = new URL(searchURITemplate.set("search", rawSearchExpression).expand());
                         } catch (final IOException e) {
                             LOG.log(Level.SEVERE, "failure", e);

@@ -1,10 +1,8 @@
 package com.avid.ctms.examples.accessfiles;
 
+import kong.unirest.*;
 import com.avid.ctms.examples.tools.common.*;
-import com.avid.ctms.examples.tools.unirest.PlatformToolsUnirest;
 import com.damnhandy.uri.template.*;
-import com.mashape.unirest.http.*;
-import com.mashape.unirest.http.exceptions.UnirestException;
 import org.json.*;
 
 import java.net.*;
@@ -52,25 +50,24 @@ public class AccessFiles {
     }
 
     public static void main(String[] args) throws Exception {
-        if (7 != args.length) {
-            LOG.log(Level.INFO, "Usage: {0} <apidomain> <servicetype> <serviceversion> <realm> <username> <password> <assetid>", AccessFiles.class.getSimpleName());
+        if (6 != args.length) {
+            LOG.log(Level.INFO, "Usage: {0} <apidomain> <httpbasicauthstring> <servicetype> <serviceversion> <realm> <assetid>", AccessFiles.class.getSimpleName());
         } else {
             final String apiDomain = args[0];
-            final String serviceType = args[1];
-            final String serviceVersion = args[2];
-            final String realm = args[3];
-            final String username = args[4];
-            final String password = args[5];
+            final String httpBasicAuthString = args[1];
+            final String serviceType = args[2];
+            final String serviceVersion = args[3];
+            final String realm = args[4];
             // deutsch.mp3: 2016051315594660101291561460050569B02260000003692B00000D0D000003
-            final String assetID = args[6];
+            final String assetID = args[5];
 
-            final boolean successfullyAuthorized = PlatformToolsUnirest.authorize(apiDomain, username, password);
-            if(successfullyAuthorized) {
+            final AuthorizationResponse authorizationResponse = PlatformTools.authorize(apiDomain, httpBasicAuthString);
+            if(authorizationResponse.getLoginResponse().map(HttpResponse::isSuccess).orElse(false)) {
                 try {
                     /// Query CTMS Registry:
                     final String registryServiceVersion = "0";
                     final String defaultAssetByIDUriTemplate = String.format("https://%s/apis/%s;version=%s;realm=%s/assets/{id}", apiDomain, serviceType, serviceVersion, realm);
-                    final List<String> assetByIDUriTemplates = PlatformToolsUnirest.findInRegistry(apiDomain, Collections.singletonList(serviceType), registryServiceVersion, "aa:asset-by-id", defaultAssetByIDUriTemplate);
+                    final List<String> assetByIDUriTemplates = PlatformTools.findInRegistry(apiDomain, Collections.singletonList(serviceType), registryServiceVersion, "aa:asset-by-id", defaultAssetByIDUriTemplate);
 
                     /// Prepare simple search request:
                     final UriTemplate searchURITemplate = UriTemplate.fromTemplate(assetByIDUriTemplates.get(0));
@@ -96,12 +93,12 @@ public class AccessFiles {
                         // Get files with filetype=FSET:
                         getFileInformation(urlAccessFileByUsageAndProtocol + "?filetype=FSET");
                     } else {
-                        LOG.log(Level.INFO, "Error getting resource <{0}>. -> {1}", new Object[] {simpleSearchResultPageURL, assetResponse.getStatusText()});
+                        LOG.log(Level.INFO, "Error getting resource <{0}>. - {1}", new Object[] {simpleSearchResultPageURL, assetResponse.getStatusText()});
                     }
                 } catch (final Exception exception) {
                     LOG.log(Level.SEVERE, "failure", exception);
                 } finally {
-                    PlatformToolsUnirest.logout(apiDomain);
+                    PlatformTools.logout(apiDomain);
                 }
             } else {
                 LOG.log(Level.INFO, "Authorization failed.");

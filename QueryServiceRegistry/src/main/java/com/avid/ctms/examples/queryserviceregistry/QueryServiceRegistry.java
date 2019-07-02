@@ -1,17 +1,13 @@
 package com.avid.ctms.examples.queryserviceregistry;
 
+import com.avid.ctms.examples.tools.common.AuthorizationResponse;
 import com.avid.ctms.examples.tools.common.PlatformTools;
-import com.mashape.unirest.http.exceptions.UnirestException;
+import kong.unirest.HttpResponse;
+import kong.unirest.Unirest;
 import net.sf.json.JSONArray;
 import net.sf.json.JSONObject;
 
-import java.io.IOException;
 import java.net.HttpURLConnection;
-import java.net.URL;
-import java.security.KeyManagementException;
-import java.security.KeyStoreException;
-import java.security.NoSuchAlgorithmException;
-import java.util.*;
 import java.util.Formatter;
 import java.util.logging.*;
 
@@ -32,38 +28,26 @@ public class QueryServiceRegistry {
     private QueryServiceRegistry() {
     }
 
-    public static void main(String[] args) throws NoSuchAlgorithmException, KeyManagementException, IOException, KeyStoreException, UnirestException {
-        if (5 != args.length) {
-            LOG.log(Level.INFO, "Usage: {0} <apidomain> <oauthtoken> <serviceversion> <username> <password>", QueryServiceRegistry.class.getSimpleName());
+    public static void main(String[] args) throws Exception {
+        if (3 != args.length) {
+            LOG.log(Level.INFO, "Usage: {0} <apidomain> <httpbasicauthstring> <serviceversion>", QueryServiceRegistry.class.getSimpleName());
         } else {
             final String apiDomain = args[0];
-            final String baseOAuthToken = args[1];
+            final String httpBasicAuthString = args[1];
             final String serviceVersion = args[2];
-            final String username = args[3];
-            final String password = args[4];
 
-            final String authorizationToken = PlatformTools.authorize(apiDomain, baseOAuthToken, username, password);
-
-            if (authorizationToken != null) {
+            final AuthorizationResponse authorizationResponse = PlatformTools.authorize(apiDomain, httpBasicAuthString);
+            if (authorizationResponse.getLoginResponse().map(HttpResponse::isSuccess).orElse(false)) {
                 try {
-                    final long then = System.currentTimeMillis();
-
                     final String registryServiceType = "avid.ctms.registry";
                     /// Check, whether the service registry is available:
-                    final URL serviceRootsResourceURL = new URL(String.format("https://%s/apis/%s;version=%s/serviceroots", apiDomain, registryServiceType, serviceVersion));
-                    final HttpURLConnection serviceRootsResourceConnection = (HttpURLConnection) serviceRootsResourceURL.openConnection();
-                    serviceRootsResourceConnection.setConnectTimeout(PlatformTools.getDefaultConnectionTimeoutms());
-                    serviceRootsResourceConnection.setReadTimeout(PlatformTools.getDefaultReadTimeoutms());
-                    serviceRootsResourceConnection.setRequestProperty("Accept", "application/hal+json");
-                    serviceRootsResourceConnection.setRequestProperty("Authorization", authorizationToken);
 
-                    final int serviceRootsStatus = serviceRootsResourceConnection.getResponseCode();
-                    System.out.println("Took: "+(System.currentTimeMillis() - then));
-
-
+                    final String urlServiceRootsResource = String.format("https://%s/apis/%s;version=%s/serviceroots", apiDomain, registryServiceType, serviceVersion);
+                    final HttpResponse<String> response = Unirest.get(urlServiceRootsResource).asString();
+                    final int serviceRootsStatus = response.getStatus();
                     if (HttpURLConnection.HTTP_OK == serviceRootsStatus) {
                         /// Doing the registry lookup and write the results to stdout:
-                        final String rawServiceRootsResult = PlatformTools.getContent(serviceRootsResourceConnection);
+                        final String rawServiceRootsResult = response.getBody();
                         final JSONObject serviceRootsResult = JSONObject.fromObject(rawServiceRootsResult);
 
                         final StringBuilder sb = new StringBuilder();
@@ -90,7 +74,7 @@ public class QueryServiceRegistry {
                             }
                         }
                     } else {
-                        LOG.log(Level.INFO, "Problem accessing <{0}>: {1}", new Object[] {serviceRootsResourceURL, PlatformTools.getContent(serviceRootsResourceConnection)});
+                        LOG.log(Level.INFO, "Problem accessing <{0}> - {1}", new Object[]{urlServiceRootsResource, response.getStatusText()});
                     }
                 } catch (final Throwable throwable) {
                     LOG.log(Level.SEVERE, "failure", throwable);
@@ -100,6 +84,7 @@ public class QueryServiceRegistry {
             } else {
                 LOG.log(Level.INFO, "Authorization failed.");
             }
+
 
             LOG.log(Level.INFO, "End");
         }

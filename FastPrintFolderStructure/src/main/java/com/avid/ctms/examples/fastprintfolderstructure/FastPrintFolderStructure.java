@@ -5,8 +5,11 @@ import java.util.*;
 import java.util.Formatter;
 import java.util.logging.*;
 
+import com.avid.ctms.examples.tools.common.AuthorizationResponse;
 import com.avid.ctms.examples.tools.common.ItemInfo;
 import com.avid.ctms.examples.tools.common.PlatformTools;
+import kong.unirest.HttpResponse;
+import kong.unirest.Unirest;
 import net.sf.json.*;
 
 /**
@@ -35,19 +38,15 @@ public class FastPrintFolderStructure {
      * @param results  the list, in which the results of traversal will be collected !!will be modified!!
      * @param depth    the depth of the traversal
      */
-    private static void traverse(String token, ItemInfo rootItem, List<ItemInfo> results, int depth) throws Exception {
+    private static void traverse(ItemInfo rootItem, List<ItemInfo> results, int depth) throws Exception {
         final Collection<ItemInfo> children = new ArrayList<>();
         final URL itemURL = rootItem.href; //new URL(rootItem.href.replace(" ", "%20"));
 
-        final HttpURLConnection getItemConnection = (HttpURLConnection) itemURL.openConnection();
-        getItemConnection.setConnectTimeout(PlatformTools.getDefaultConnectionTimeoutms());
-        getItemConnection.setReadTimeout(PlatformTools.getDefaultReadTimeoutms());
-        getItemConnection.setRequestProperty("Accept", "application/hal+json");
-        getItemConnection.setRequestProperty("Authorization", token);
+        final HttpResponse<String> response = Unirest.get(itemURL.toString()).asString();
 
-        final int itemStatus = getItemConnection.getResponseCode();
+        final int itemStatus = response.getStatus();
         if (HttpURLConnection.HTTP_OK == itemStatus) {
-            final String rawItemPageResults = PlatformTools.getContent(getItemConnection);
+            final String rawItemPageResults = response.getBody();
             final JSONObject itemResult = JSONObject.fromObject(rawItemPageResults);
             results.add(new ItemInfo(itemResult, depth));
 
@@ -80,15 +79,11 @@ public class FastPrintFolderStructure {
 
                         final JSONObject linkToNextPage = (JSONObject) collection.getJSONObject("_links").get("next");
                         if (null != linkToNextPage) {
-                            final HttpURLConnection itemNextPageConnection = (HttpURLConnection) new URL(linkToNextPage.getString("href").replace(" ", "%20")).openConnection();
-                            itemNextPageConnection.setConnectTimeout(PlatformTools.getDefaultConnectionTimeoutms());
-                            itemNextPageConnection.setReadTimeout(PlatformTools.getDefaultReadTimeoutms());
-                            itemNextPageConnection.setRequestProperty("Accept", "application/hal+json");
-                            itemNextPageConnection.setRequestProperty("Authorization", token);
 
-                            final int itemNextPageStatus = itemNextPageConnection.getResponseCode();
-                            if (200 == itemNextPageStatus) {
-                                final String rawNextItemPageResults = PlatformTools.getContent(itemNextPageConnection);
+                            final HttpResponse<String> page = Unirest.get(linkToNextPage.getString("href").replace(" ", "%20")).asString();
+                            final int itemNextPageStatus = page.getStatus();
+                            if (HttpURLConnection.HTTP_OK == itemNextPageStatus) {
+                                final String rawNextItemPageResults = page.getBody();
                                 collection = JSONObject.fromObject(rawNextItemPageResults);
                                 embeddedItems = (JSONObject) collection.get("_embedded");
                             } else {
@@ -103,7 +98,7 @@ public class FastPrintFolderStructure {
 
             for (final ItemInfo item : children) {
                 if (item.hasChildren) {
-                    traverse(token, item, results, depth + 1);
+                    traverse(item, results, depth + 1);
                 }
             }
 
@@ -113,25 +108,23 @@ public class FastPrintFolderStructure {
                 }
             }
         } else {
-            final String message = PlatformTools.getContent(getItemConnection);
+            final String message = response.getStatusText();
             LOG.log(Level.INFO, "Get item failed for item <{0}>. -> {1}", new Object[] {itemURL, message});
         }
     }
 
     public static void main(String[] args) throws Exception {
-        if (7 != args.length) {
-            LOG.log(Level.INFO, "Usage: {0} <apidomain> <oauthtoken> <servicetype> <serviceversion> <realm> <username> <password>", FastPrintFolderStructure.class.getSimpleName());
+        if (5 != args.length) {
+            LOG.log(Level.INFO, "Usage: {0} <apidomain> <httpbasicauthstring> <servicetype> <serviceversion> <realm>", FastPrintFolderStructure.class.getSimpleName());
         } else {
             final String apiDomain = args[0];
-            final String baseOAuthToken = args[1];
+            final String httpBasicAuthString = args[1];
             final String serviceType = args[2];
             final String serviceVersion = args[3];
             final String realm = args[4];
-            final String username = args[5];
-            final String password = args[6];
 
-            final String authorizationToken = PlatformTools.authorize(apiDomain, baseOAuthToken, username, password);
-            if (authorizationToken != null) {
+            final AuthorizationResponse authorizationResponse = PlatformTools.authorize(apiDomain, httpBasicAuthString);
+            if (authorizationResponse.getLoginResponse().map(HttpResponse::isSuccess).orElse(false)) {
                 try {
                     /// Query CTMS Registry:
                     final String registryServiceVersion = "0";
@@ -139,17 +132,13 @@ public class FastPrintFolderStructure {
                     final List<String> locationsUriTemplates = PlatformTools.findInRegistry(apiDomain, Collections.singletonList(serviceType), registryServiceVersion, "loc:locations", defaultLocationsUriTemplate);
 
                     /// Check presence of the locations resource and continue with HATEOAS:
-                    final URL locationsURL = new URL(locationsUriTemplates.get(0));
-                    final HttpURLConnection getLocationsConnection = (HttpURLConnection) locationsURL.openConnection();
-                    getLocationsConnection.setConnectTimeout(PlatformTools.getDefaultConnectionTimeoutms());
-                    getLocationsConnection.setReadTimeout(PlatformTools.getDefaultReadTimeoutms());
-                    getLocationsConnection.setRequestProperty("Accept", "application/hal+json");
-                    getLocationsConnection.setRequestProperty("Authorization", authorizationToken);
+                    final String urlLocation = locationsUriTemplates.get(0);
+                    final HttpResponse<String> response = Unirest.get(urlLocation).asString();
 
-                    final int locationsStatus = getLocationsConnection.getResponseCode();
+                    final int locationsStatus = response.getStatus();
                     if (HttpURLConnection.HTTP_OK == locationsStatus) {
                         /// Get the root folder item:
-                        final String rawLocationsResults = PlatformTools.getContent(getLocationsConnection);
+                        final String rawLocationsResults = response.getBody();
                         final JSONObject locationsResults = JSONObject.fromObject(rawLocationsResults);
                         final String urlRootItem = locationsResults.getJSONObject("_links").getJSONObject("loc:root-item").getString("href");
 
@@ -166,7 +155,7 @@ public class FastPrintFolderStructure {
                         final List<ItemInfo> results = new ArrayList<>();
                         /// Traverse the folder tree and collect the results in the passed list:
                         final long then = System.currentTimeMillis();
-                        traverse(authorizationToken, rootItem, results, 0);
+                        traverse(rootItem, results, 0);
                         final StringBuilder sb = new StringBuilder();
                         try (final Formatter formatter = new Formatter(sb)) {
                             for (final ItemInfo item : results) {
@@ -176,7 +165,7 @@ public class FastPrintFolderStructure {
                         final long took = System.currentTimeMillis() - then;
                         LOG.log(Level.INFO, "{0}elapsed: {1}", new Object[] {sb, took});
                     } else {
-                        LOG.log(Level.INFO, "Resource <{0}> not found. -> {1}", new Object[] {locationsURL, PlatformTools.getContent(getLocationsConnection)});
+                        LOG.log(Level.INFO, "Resource <{0}> not found. - {1}", new Object[] {urlLocation, response.getStatusText()});
                     }
                 } catch (final Exception exception) {
                     LOG.log(Level.SEVERE, "failure", exception);

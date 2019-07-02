@@ -5,8 +5,11 @@ import java.util.*;
 import java.util.Formatter;
 import java.util.logging.*;
 
+import com.avid.ctms.examples.tools.common.AuthorizationResponse;
 import com.avid.ctms.examples.tools.common.PlatformTools;
 import com.damnhandy.uri.template.UriTemplate;
+import kong.unirest.HttpResponse;
+import kong.unirest.Unirest;
 import net.sf.json.*;
 
 /**
@@ -27,29 +30,27 @@ public class SimpleSearch {
     }
 
     public static void main(String[] args) throws Exception {
-        if (8 != args.length || "'".equals(args[7]) || !args[7].startsWith("'") || !args[7].endsWith("'")) {
-            LOG.log(Level.INFO, "Usage: {0} <apidomain> <oauthtoken> <servicetype> <serviceversion> <realm> <username> <password> '<simplesearchexpression>'", SimpleSearch.class.getSimpleName());
+        if (6 != args.length || "'".equals(args[5]) || !args[5].startsWith("'") || !args[5].endsWith("'")) {
+            LOG.log(Level.INFO, "Usage: {0} <apidomain> <httpbasicauthstring> <servicetype> <serviceversion> <realm> '<simplesearchexpression>'", SimpleSearch.class.getSimpleName());
         } else {
             final String apiDomain = args[0];
-            final String oauthToken = args[1];
+            final String httpBasicAuthString = args[1];
             final String serviceType = args[2];
             final String serviceVersion = args[3];
             final String realm = args[4];
-            final String username = args[5];
-            final String password = args[6];
-            final String rawSearchExpression = args[7].substring(1, args[7].length() - 1);
+            final String rawSearchExpression = args[5].substring(1, args[5].length() - 1);
 
-            final String authorizationToken = PlatformTools.authorize(apiDomain, oauthToken, username, password);
-            if (authorizationToken != null) {
+            final AuthorizationResponse authorizationResponse = PlatformTools.authorize(apiDomain, httpBasicAuthString);
+            if (authorizationResponse.getLoginResponse().map(HttpResponse::isSuccess).orElse(false)) {
                 try {
                     /// Query CTMS Registry:
                     final String registryServiceVersion = "0";
                     final String defaultSimpleSearchUriTemplate = String.format("https://%s/apis/%s;version=%s;realm=%s/searches/simple?search={search}{&offset,limit,sort}", apiDomain, serviceType, serviceVersion, realm);
                     final List<String> simpleSearchUriTemplates = PlatformTools.findInRegistry(apiDomain, Collections.singletonList(serviceType), registryServiceVersion, "search:simple-search", defaultSimpleSearchUriTemplate);
-                    // final List<String> simpleSearchUriTemplates = Collections.singletonList(defaultSimpleSearchUriTemplate); // for debugging purposes
 
                     /// Prepare simple search request:
-                    final UriTemplate searchURITemplate = UriTemplate.fromTemplate(simpleSearchUriTemplates.get(0));
+                    final Optional<String> simpleSearchUriTemplateCandidate = simpleSearchUriTemplates.stream().filter(searchUrl -> searchUrl.contains(realm)).findFirst();
+                    final UriTemplate searchURITemplate = UriTemplate.fromTemplate(simpleSearchUriTemplateCandidate.orElse(defaultSimpleSearchUriTemplate));
                     URL simpleSearchResultPageURL = new URL(searchURITemplate.set("search", rawSearchExpression).expand());
 
                     /// Issue the simple search and page through the result:
@@ -58,15 +59,10 @@ public class SimpleSearch {
                     final StringBuilder sb = new StringBuilder();
                     try (final Formatter formatter = new Formatter(sb)) {
                         do {
-                            final HttpURLConnection simpleSearchResultPageConnection = (HttpURLConnection) simpleSearchResultPageURL.openConnection();
-                            simpleSearchResultPageConnection.setConnectTimeout(PlatformTools.getDefaultConnectionTimeoutms());
-                            simpleSearchResultPageConnection.setReadTimeout(PlatformTools.getDefaultReadTimeoutms());
-                            simpleSearchResultPageConnection.setRequestProperty("Accept", "application/hal+json");
-                            simpleSearchResultPageConnection.setRequestProperty("Authorization", authorizationToken);
-
-                            final int simpleSearchStatus = simpleSearchResultPageConnection.getResponseCode();
+                            final HttpResponse<String> response = Unirest.get(simpleSearchResultPageURL.toString()).asString();
+                            final int simpleSearchStatus = response.getStatus();
                             if (HttpURLConnection.HTTP_OK == simpleSearchStatus) {
-                                final String rawSimpleSearchPageResult = PlatformTools.getContent(simpleSearchResultPageConnection);
+                                final String rawSimpleSearchPageResult = response.getBody();
 
                                 final JSONObject simpleSearchPageResult = JSONObject.fromObject(rawSimpleSearchPageResult);
                                 final JSONObject embeddedResults = (JSONObject) simpleSearchPageResult.get("_embedded");
@@ -98,14 +94,14 @@ public class SimpleSearch {
                                         ? new URL(linkToNextPage.getString("href"))
                                         : null;
                             } else {
-                                LOG.log(Level.INFO, "Simple search failed for search expression {0}. -> {1}", new Object[]{rawSearchExpression, PlatformTools.getContent(simpleSearchResultPageConnection)});
+                                LOG.log(Level.INFO, "Simple search failed for search expression {0}. - {1}", new Object[]{rawSearchExpression, response.getStatusText()});
                                 simpleSearchResultPageURL = null;
                             }
                         } while (null != simpleSearchResultPageURL);
                     }
                     LOG.log(Level.INFO, 0 != sb.length() ? sb.toString() : "No hits!");
-                } catch (final Throwable throwable) {
-                    LOG.log(Level.INFO, "failure", throwable);
+                } catch (final Exception e) {
+                    LOG.log(Level.INFO, "failure", e);
                 } finally {
                     PlatformTools.logout(apiDomain);
                 }

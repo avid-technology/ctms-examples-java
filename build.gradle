@@ -11,10 +11,10 @@ subprojects {
     dependencies {
         compile 'net.sf.json-lib:json-lib:2.4:jdk15'
         compile 'org.jboss.resteasy:resteasy-client:3.0.19.Final'
-		compile 'com.mashape.unirest:unirest-java:1.4.9'
-        compile 'io.projectreactor:reactor-core:3.0.4.RELEASE'
+        compile 'com.konghq:unirest-java:2.3.02'
+        compile 'io.projectreactor:reactor-core:3.2.6.RELEASE'
         compile 'com.damnhandy:handy-uri-templates:2.1.2'
-        compile group: 'com.fasterxml.jackson.core', name: 'jackson-databind', version: '2.0.1'
+        compile 'com.fasterxml.jackson.core:jackson-databind:2.9.4'
     }
 
     sourceCompatibility = 1.8

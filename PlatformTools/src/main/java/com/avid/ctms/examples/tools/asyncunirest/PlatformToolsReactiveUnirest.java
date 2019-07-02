@@ -7,22 +7,20 @@ package com.avid.ctms.examples.tools.asyncunirest;
  * Project: CTMS
  */
 
-import com.mashape.unirest.http.HttpResponse;
-import com.mashape.unirest.http.*;
-import com.mashape.unirest.http.async.*;
-import com.mashape.unirest.http.exceptions.*;
+import kong.unirest.*;
+import kong.unirest.HttpResponse;
 import org.apache.http.*;
 import org.apache.http.conn.ssl.*;
 import org.apache.http.impl.nio.client.*;
+import org.apache.http.ssl.SSLContexts;
 import org.json.*;
-import reactor.core.publisher.Mono;
 
 import javax.net.ssl.*;
 import java.io.*;
+import java.net.HttpURLConnection;
 import java.security.*;
 import java.util.*;
 import java.util.concurrent.*;
-import java.util.function.*;
 import java.util.logging.*;
 
 /**
@@ -54,15 +52,22 @@ public class PlatformToolsReactiveUnirest {
 
     private static CloseableHttpAsyncClient createSSLClient() throws KeyStoreException, NoSuchAlgorithmException, KeyManagementException {
         final SSLContext sslContext =
-                org.apache.http.ssl.SSLContexts
+                SSLContexts
                         .custom()
-                        .loadTrustMaterial(null, new TrustSelfSignedStrategy())
+                        .loadTrustMaterial(null, TrustSelfSignedStrategy.INSTANCE)
                         .build();
+
+        final String proxyHost = System.getProperty("https.proxyHost");
+        final String proxyPort = System.getProperty("https.proxyPort");
+
+        if (null != proxyHost) {
+            LOG.log(Level.INFO, "using proxy: {0}, port: {1}", new Object[]{proxyHost, proxyPort});
+        }
 
         return HttpAsyncClients.custom()
                 .setSSLHostnameVerifier(new NoopHostnameVerifier())
                 .setSSLContext(sslContext)
-                //.setProxy(new HttpHost("127.0.0.1", 8888))
+                .setProxy((null != proxyHost) ? new HttpHost(proxyHost, Integer.parseInt(proxyPort)) : null)
                 .build();
     }
 
@@ -73,9 +78,10 @@ public class PlatformToolsReactiveUnirest {
      * Prepares the Unirest environment.
      */
     public static void prepare() {
-        Unirest.setTimeouts(getDefaultConnectionTimeoutms(), getDefaultReadTimeoutms());
+        //Unirest.setTimeouts(getDefaultConnectionTimeoutms(), getDefaultReadTimeoutms());
         try {
-            Unirest.setAsyncHttpClient(createSSLClient());
+            Unirest.config().verifySsl(false);
+            Unirest.config().asyncClient(createSSLClient());
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -86,7 +92,7 @@ public class PlatformToolsReactiveUnirest {
      *
      * @param apiDomain address to get the authorization endpoint
      * @return  promise, which promises delivery of a HAL resource representing the authorization endpoint encapsulated
-     *          in an HttpResponse<JsonNode>
+     *          in an HttpResponse&lt;JsonNode>
      */
     public static CompletionStage<HttpResponse<JsonNode>> getAuthEndpoint(String apiDomain) {
         final CompletableFuture<HttpResponse<JsonNode>> promise = new CompletableFuture<>();
@@ -96,7 +102,7 @@ public class PlatformToolsReactiveUnirest {
                 .asJsonAsync(new Callback<JsonNode>() {
                     @Override
                     public void completed(HttpResponse<JsonNode> authResponse) {
-                        if (200 == authResponse.getStatus() || 303 == authResponse.getStatus()) {
+                        if (HttpURLConnection.HTTP_OK == authResponse.getStatus() || HttpURLConnection.HTTP_SEE_OTHER == authResponse.getStatus()) {
                             promise.complete(authResponse);
                         } else {
                             promise.completeExceptionally(new Exception(authResponse.getStatusText()));
@@ -125,12 +131,11 @@ public class PlatformToolsReactiveUnirest {
      *
      * @param lastResponse a response object encapsulating the authorization endpoint HAL resource
      * @return  promise, which promises delivery of a HAL resource representing the identity providers encapsulated
-     *          in an HttpResponse<JsonNode>
+     *          in an HttpResponse&lt;JsonNode>
      */
     public static CompletionStage<HttpResponse<JsonNode>> getIdentityProviders(HttpResponse<JsonNode> lastResponse) {
         final CompletableFuture<HttpResponse<JsonNode>> identityProviderPromise = new CompletableFuture<>();
 
-        final int authStatusCode = lastResponse.getStatus();
         final JSONObject authResult = lastResponse.getBody().getObject();
         try {
             final String urlIdentityProviders = authResult.getJSONObject("_links").getJSONArray("auth:identity-providers").getJSONObject(0).getString("href");
@@ -139,7 +144,7 @@ public class PlatformToolsReactiveUnirest {
                     .asJsonAsync(new Callback<JsonNode>() {
                         @Override
                         public void completed(HttpResponse<JsonNode> response) {
-                            if (200 == response.getStatus() || 303 == response.getStatus()) {
+                            if (HttpURLConnection.HTTP_OK == response.getStatus() || HttpURLConnection.HTTP_SEE_OTHER == response.getStatus()) {
                                 identityProviderPromise.complete(response);
                             } else {
                                 identityProviderPromise.completeExceptionally(new Exception(response.getStatusText()));
@@ -158,7 +163,7 @@ public class PlatformToolsReactiveUnirest {
                             identityProviderPromise.completeExceptionally(new Exception("The request has failed", e));
                         }
                     });
-        } catch (Exception e) {
+        } catch (final Exception e) {
             identityProviderPromise.completeExceptionally(new Exception("Requesting auth has failed", e));
         }
 
@@ -166,38 +171,45 @@ public class PlatformToolsReactiveUnirest {
     }
 
     /**
-     * Promises MC|UX-based authorization with the passed identity providers HAL resource.
+     * Promises OAuth2-identity-provider based authorization via an HTTP Basic Auth String with the passed identity providers HAL resource.
      *
      * @param apiDomain address to get "auth"
-     * @param username  MC|UX login
-     * @param password  MC|UX password
+     * @param httpBasicAuthString HTTP Basic Auth String
      * @return  promise, which promises authorization
      */
-    public static CompletionStage<Object> authorize(HttpResponse<JsonNode> lastResponse, String apiDomain, String username, String password) {
+    public static CompletionStage<Object> authorize(HttpResponse<JsonNode> lastResponse, String apiDomain, String httpBasicAuthString) {
         final CompletableFuture<Object> authorizationPromise = new CompletableFuture<>();
 
-        // Select MC|UX identity provider and retrieve login URL:
+        // Select ropc-default identity provider and retrieve login URL:
         String urlAuthorization = null;
         final JSONArray identityProviders = lastResponse.getBody().getObject().getJSONObject("_embedded").getJSONArray("auth:identity-provider");
         for (int i = 0; i < identityProviders.length(); ++i) {
             final JSONObject identityProvider = identityProviders.getJSONObject(i);
-            if (Objects.equals(identityProvider.get("kind"), "mcux")) {
-                final JSONArray logins = identityProvider.getJSONObject("_links").getJSONArray("auth-mcux:login");
-                if (0 < logins.length()) {
-                    urlAuthorization = logins.getJSONObject(0).getString("href");
+
+            if (identityProvider.getJSONObject("_links").has("auth:ropc-default")) {
+                final JSONArray ropcIdentityProvider = identityProvider.getJSONObject("_links").getJSONArray("auth:ropc-default");
+                if (0 < ropcIdentityProvider.length()) {
+                    urlAuthorization = ropcIdentityProvider.getJSONObject(0).getString("href");
                 }
                 break;
             }
         }
         if (null != urlAuthorization) {
+            final String loginContent = "grant_type=client_credentials&scope=openid";
+            final String authorizationDefaultToken = String.format("Basic %s", httpBasicAuthString);
             Unirest.post(urlAuthorization)
                     .header("Accept", "application/json")
-                    .header("Content-Type", "application/json")
-                    .body(String.format("{ \"username\" : \"%s\", \"password\" :  \"%s\"}", username, password))
+                    .header("Content-Type", "application/x-www-form-urlencoded")
+                    .header("Authorization", authorizationDefaultToken)
+                    .body(loginContent)
                     .asJsonAsync(new Callback<JsonNode>() {
                         @Override
                         public void completed(HttpResponse<JsonNode> response) {
-                            if (200 == response.getStatus() || 303 == response.getStatus()) {
+                            if (HttpURLConnection.HTTP_OK == response.getStatus() || HttpURLConnection.HTTP_SEE_OTHER == response.getStatus()) {
+                                final String id_token = response.getBody().getObject().getString("id_token");
+                                final String accessTokenHeaderFieldValue = String.format("Bearer %s", id_token);
+                                Unirest.config().setDefaultHeader("Authorization", accessTokenHeaderFieldValue);
+
                                 scheduler = Executors.newScheduledThreadPool(1);
                                 final Runnable sessionRefresherCode = () -> {
                                     try {
@@ -239,7 +251,7 @@ public class PlatformToolsReactiveUnirest {
      *
      * @param lastResponse a response object encapsulating the authorization endpoint HAL resource
      * @return  promise, which promises delivery of a HAL resource representing the current session/identity token
-     *          encapsulated in an HttpResponse<JsonNode>
+     *          encapsulated in an HttpResponse&lt;JsonNode>
      */
     public static CompletionStage<HttpResponse<JsonNode>> getCurrentToken(HttpResponse<JsonNode> lastResponse) {
         final CompletableFuture<HttpResponse<JsonNode>> promise = new CompletableFuture<>();
@@ -261,7 +273,7 @@ public class PlatformToolsReactiveUnirest {
                     .asJsonAsync(new Callback<JsonNode>() {
                         @Override
                         public void completed(HttpResponse<JsonNode> currentTokenResponse) {
-                            if (200 == currentTokenResponse.getStatus() || 303 == currentTokenResponse.getStatus()) {
+                            if (HttpURLConnection.HTTP_OK == currentTokenResponse.getStatus() || HttpURLConnection.HTTP_SEE_OTHER == currentTokenResponse.getStatus()) {
                                 promise.complete(currentTokenResponse);
                             } else {
                                 promise.completeExceptionally(new Exception(currentTokenResponse.getStatusText()));
@@ -291,16 +303,16 @@ public class PlatformToolsReactiveUnirest {
      * @param lastResponse a response object encapsulating the session/identity token HAL resource
      * @return  promise, which promises removal of the session
      */
-    public static CompletionStage<HttpResponse<JsonNode>> removeToken(HttpResponse<JsonNode> lastResponse){
-        final CompletableFuture<HttpResponse<JsonNode>> promise = new CompletableFuture<>();
+    public static CompletionStage<HttpResponse<Empty>> removeToken(HttpResponse<JsonNode> lastResponse){
+        final CompletableFuture<HttpResponse<Empty>> promise = new CompletableFuture<>();
 
         final int tokenStatusCode = lastResponse.getStatus();
         final String tokenRemoval = lastResponse.getBody().getObject().getJSONObject("_links").getJSONArray("auth-token:removal").getJSONObject(0).getString("href");
 
         Unirest.delete(tokenRemoval)
-                .asJsonAsync(new Callback<JsonNode>() {
+                .asEmptyAsync(new Callback<Empty>() {
                     @Override
-                    public void completed(HttpResponse<JsonNode> deleteTokenResponse) {
+                    public void completed(HttpResponse<Empty> deleteTokenResponse) {
                         // Should result in 204:
                         final int responseCode = deleteTokenResponse.getStatus();
                         promise.complete(deleteTokenResponse);
@@ -344,7 +356,7 @@ public class PlatformToolsReactiveUnirest {
                 .asJsonAsync(new Callback<JsonNode>() {
                     @Override
                     public void completed(HttpResponse<JsonNode> serviceRootsResponse) {
-                        if (200 == serviceRootsResponse.getStatus() || 303 == serviceRootsResponse.getStatus()) {
+                        if (HttpURLConnection.HTTP_OK == serviceRootsResponse.getStatus() || HttpURLConnection.HTTP_SEE_OTHER == serviceRootsResponse.getStatus()) {
                             final JSONObject serviceRootsResult = serviceRootsResponse.getBody().getObject();
                             try {
                                 final JSONObject resources = serviceRootsResult.getJSONObject("resources");
@@ -422,7 +434,7 @@ public class PlatformToolsReactiveUnirest {
      *
      * @param resultPageURL URL to a HAL resource, which supports paging
      * @return  promise, which promises delivery of all pages representing the HAL resources available via the passed
-     *          resultPageURL encapsulated in a List<JSONObject>
+     *          resultPageURL encapsulated in a List&lt;JSONObject>
      */
     public static CompletionStage<List<JSONObject>> pageThroughResultsAsync(String resultPageURL) {
         final CompletableFuture<List<JSONObject>> promise = new CompletableFuture<>();
@@ -434,7 +446,7 @@ public class PlatformToolsReactiveUnirest {
                     @Override
                     public void completed(HttpResponse<JsonNode> response) {
                         try {
-                            if (200 == response.getStatus() || 303 == response.getStatus()) {
+                            if (HttpURLConnection.HTTP_OK == response.getStatus() || HttpURLConnection.HTTP_SEE_OTHER == response.getStatus()) {
                                 if (response.getBody().getObject().has("_embedded")) { // Do we have (more) results?
                                     final JSONObject embeddedResults = response.getBody().getObject().getJSONObject("_embedded");
                                     pages.add(embeddedResults);
@@ -479,32 +491,40 @@ public class PlatformToolsReactiveUnirest {
     }
 
 
-    /**
+    /**a
      * Signals to the platform, that our session is still in use.
      *
      * @param apiDomain address against to which we want send a keep alive signal
      * @throws IOException
      */
     public static void sessionKeepAlive(String apiDomain) throws IOException {
-        // TODO: this is a workaround, see {CORE-7359}. In future the access token prolongation API should be used.
-        Unirest.get(String.format("https://%s/api/middleware/service/ping", apiDomain))
-                .header("Accept", "application/json")
-                .asJsonAsync(new Callback<JsonNode>() {
-                    @Override
-                    public void completed(HttpResponse<JsonNode> response) {
-                        LOG.log(Level.INFO, "Pinged");
-                    }
+        final HttpResponse<String> jsonNodeHttpResponse
+                = Unirest
+                .get(String.format("https://%s/auth/", apiDomain))
+                .asString();
+        final JSONObject authResponse = new JSONObject(jsonNodeHttpResponse.getBody());
 
-                    @Override
-                    public void cancelled() {
-                        LOG.log(Level.INFO, "The ping request was cancelled.");
-                    }
+        final String urlCurrentToken
+                = authResponse
+                .getJSONObject("_links")
+                .getJSONArray("auth:token")
+                .getJSONObject(0)
+                .getString("href");
 
-                    @Override
-                    public void failed(UnirestException e) {
-                        LOG.log(Level.SEVERE, "The ping request failed.", e);
-                    }
-                });
+        Unirest.get(urlCurrentToken)
+                .asStringAsync()
+                .thenApply(it -> {
+                    final JSONObject currentTokenResult = new JSONObject(it.getBody());
+                    final String urlExtend = currentTokenResult
+                            .getJSONObject("_links")
+                            .getJSONArray("auth-token:extend")
+                            .getJSONObject(0)
+                            .get("href")
+                            .toString();
+                    return urlExtend;
+                }).thenAccept(it -> {
+            Unirest.post(it).asEmpty();
+        });
     }
 
     public static void unregister() {
@@ -514,8 +534,8 @@ public class PlatformToolsReactiveUnirest {
             sessionRefresher.cancel(true);
         }
         try {
-            Unirest.shutdown();
-        } catch (final IOException exception) {
+            Unirest.shutDown();
+        } catch (final Exception exception) {
             LOG.log(Level.SEVERE, "failure", exception);
         }
     }

@@ -1,7 +1,10 @@
 package com.avid.ctms.examples.orchestration.startprocess;
 
+import com.avid.ctms.examples.tools.common.AuthorizationResponse;
 import com.avid.ctms.examples.tools.common.PlatformTools;
 import com.damnhandy.uri.template.UriTemplate;
+import kong.unirest.HttpResponse;
+import kong.unirest.Unirest;
 import net.sf.json.JSONObject;
 
 import java.net.HttpURLConnection;
@@ -27,18 +30,16 @@ public class StartProcess {
     }
 
     public static void main(String[] args) throws Exception {
-        if (6 != args.length) {
-            LOG.log(Level.INFO, "Usage: {0} <apidomain> <oauthtoken> <serviceversion> <realm> <username> <password>", StartProcess.class.getSimpleName());
+        if (4 != args.length) {
+            LOG.log(Level.INFO, "Usage: {0} <apidomain> <httpbasicauthstring> <serviceversion> <realm>", StartProcess.class.getSimpleName());
         } else {
             final String apiDomain = args[0];
-            final String baseOAuthToken = args[1];
+            final String httpBasicAuthString = args[1];
             final String serviceVersion = args[2];
             final String realm = args[3];
-            final String username = args[4];
-            final String password = args[5];
 
-            final String authorizationToken = PlatformTools.authorize(apiDomain, baseOAuthToken, username, password);
-            if (authorizationToken != null) {
+            final AuthorizationResponse authorizationResponse = PlatformTools.authorize(apiDomain, httpBasicAuthString);
+            if (authorizationResponse.getLoginResponse().map(HttpResponse::isSuccess).orElse(false)) {
                 try {
                     final String orchestrationServiceType = "avid.orchestration.ctc";
 
@@ -61,22 +62,17 @@ public class StartProcess {
                     final UriTemplate processUriTemplate = UriTemplate.fromTemplate(processUriTemplates.get(0));
                     final URL startProcessURL = new URL(processUriTemplate.expand());
 
-                    final HttpURLConnection startProcessConnection = (HttpURLConnection) startProcessURL.openConnection();
-                    startProcessConnection.setConnectTimeout(PlatformTools.getDefaultConnectionTimeoutms());
-                    startProcessConnection.setReadTimeout(PlatformTools.getDefaultReadTimeoutms());
-                    startProcessConnection.setRequestMethod("POST");
-                    startProcessConnection.setDoOutput(true);
-                    startProcessConnection.setRequestProperty("Content-Type", "application/json");
-                    startProcessConnection.setRequestProperty("Accept", "application/hal+json");
-                    startProcessConnection.setRequestProperty("Authorization", authorizationToken);
-
-                    startProcessConnection.getOutputStream().write(processDescription.getBytes());
+                    final HttpResponse<String> response
+                            = Unirest.post(startProcessURL.toString())
+                            .header("Content-Type", "application/json")
+                            .body(processDescription)
+                            .asString();
 
                     /// Monitor the process:
-                    final int startProcessStatus = startProcessConnection.getResponseCode();
+                    final int startProcessStatus = response.getStatus();
                     if (HttpURLConnection.HTTP_OK == startProcessStatus) {
                         // Begin monitoring the started process:
-                        String rawStartedProcessResult = PlatformTools.getContent(startProcessConnection);
+                        String rawStartedProcessResult = response.getBody();
                         JSONObject startedProcessResult = JSONObject.fromObject(rawStartedProcessResult);
                         final String urlStartedProcess = startedProcessResult.getJSONObject("_links").getJSONObject("self").getString("href");
                         String lifecycle = startedProcessResult.getString("lifecycle");
@@ -86,18 +82,18 @@ public class StartProcess {
                         if ("pending".equals(lifecycle) || "running".equals(lifecycle)) {
                             do {
                                 Thread.sleep(500);
-                                final HttpURLConnection runningProcessConnection = (HttpURLConnection) new URL(urlStartedProcess).openConnection();
-                                runningProcessConnection.setConnectTimeout(PlatformTools.getDefaultConnectionTimeoutms());
-                                runningProcessConnection.setReadTimeout(PlatformTools.getDefaultReadTimeoutms());
-                                rawStartedProcessResult = PlatformTools.getContent(runningProcessConnection);
-                                startedProcessResult = JSONObject.fromObject(rawStartedProcessResult);
+
+                                final HttpResponse<String> startedProcessResponse
+                                        = Unirest.get(urlStartedProcess).asString();
+
+                                startedProcessResult = JSONObject.fromObject(startedProcessResponse.getBody());
                                 lifecycle = startedProcessResult.getString("lifecycle");
 
                                 LOG.log(Level.INFO, "Lifecycle: {0}", lifecycle);
                             } while ("running".equals(lifecycle) || "pending".equals(lifecycle));
                         }
                     } else {
-                        LOG.log(Level.INFO, "Starting process failed with {0}", PlatformTools.getContent(startProcessConnection));
+                        LOG.log(Level.INFO, "Starting process failed. - {0}", response.getStatusText());
                     }
                 } catch (final Exception exception) {
                     LOG.log(Level.SEVERE, "failure", exception);

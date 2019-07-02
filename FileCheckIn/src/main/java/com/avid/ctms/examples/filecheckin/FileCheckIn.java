@@ -5,8 +5,7 @@ import java.util.*;
 import java.util.logging.*;
 
 import com.avid.ctms.examples.tools.common.*;
-import com.avid.ctms.examples.tools.unirest.PlatformToolsUnirest;
-import com.mashape.unirest.http.*;
+import kong.unirest.*;
 import org.json.*;
 
 
@@ -29,22 +28,21 @@ public class FileCheckIn {
     }
 
     public static void main(String[] args) throws Exception {
-        if (6 != args.length) {
-            LOG.log(Level.INFO, "Usage: {0} <apidomain> <serviceversion> <realm> <username> <password> <sourcepath>", FileCheckIn.class.getSimpleName());
+        if (4 != args.length) {
+            LOG.log(Level.INFO, "Usage: {0} <apidomain> <httpbasicauthstring> <serviceversion> <realm> <sourcepath>", FileCheckIn.class.getSimpleName());
         } else {
             final String apiDomain = args[0];
-            final String serviceVersion = args[1];
-            final String realm = args[2];
-            final String username = args[3];
-            final String password = args[4];
+            final String httpBasicAuthString = args[1];
+            final String serviceVersion = args[2];
+            final String realm = args[3];
 
-            final boolean successfullyAuthorized = PlatformToolsUnirest.authorize(apiDomain, username, password);
-            if (successfullyAuthorized) {
+            final AuthorizationResponse authorizationResponse = PlatformTools.authorize(apiDomain, httpBasicAuthString);
+            if (authorizationResponse.getLoginResponse().map(HttpResponse::isSuccess).orElse(false)) {
                 try {
                     final String fileCheckInUriTemplate = String.format("https://%s/apis/avid.mam.assets.access;version=%s;realm=%s/mam/file-check-in", apiDomain, serviceVersion, realm);
 
                     //final String sourcePath = "\\\\\\\\nas4\\\\MAMSTORE\\\\mam-b\\\\MediaAssetManager\\\\Terminator.jpg";
-                    final String sourcePath = args[5];
+                    final String sourcePath = args[3];
                     final String body = String.format(
                             "{"
                                     + "\"file\" : \"%s\","
@@ -118,7 +116,7 @@ public class FileCheckIn {
 
                                     final int assetUpdateStatus = assetUpdateResponse.getStatus();
                                     if (2 != assetUpdateStatus / 100) {
-                                        LOG.log(Level.INFO, "Update metadata failed with: {0}", assetUpdateStatus);
+                                        LOG.log(Level.INFO, "Update metadata failed with: {0}", assetUpdateResponse.getStatusText());
                                     }
                                 }
                             } else {
@@ -128,12 +126,12 @@ public class FileCheckIn {
                             LOG.log(Level.INFO, "File check in failed with: {0}", lifeCycle);
                         }
                     } else {
-                        LOG.log(Level.INFO, "File check in not supported! -> {0}", fileCheckInResponse.getBody());
+                        LOG.log(Level.INFO, "File check in not supported! - {0}", fileCheckInResponse.getStatusText());
                     }
                 } catch (final Exception exception) {
                     LOG.log(Level.SEVERE, "failure", exception);
                 } finally {
-                    PlatformToolsUnirest.logout(apiDomain);
+                    PlatformTools.logout(apiDomain);
                 }
             } else {
                 LOG.log(Level.INFO, "Authorization failed.");
