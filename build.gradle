@@ -1,7 +1,6 @@
 apply plugin: 'idea'
 apply plugin: 'java'
 
-
 subprojects {
     repositories {
         mavenCentral()
@@ -15,6 +14,7 @@ subprojects {
         compile 'io.projectreactor:reactor-core:3.2.6.RELEASE'
         compile 'com.damnhandy:handy-uri-templates:2.1.2'
         compile 'com.fasterxml.jackson.core:jackson-databind:2.9.4'
+        compile 'io.undertow:undertow-websockets-jsr:1.4.25.Final'
     }
 
     sourceCompatibility = 1.8
@@ -24,6 +24,11 @@ subprojects {
 task copyJars(type: Copy, dependsOn: subprojects.jar) {
     from(subprojects.jar)
     into project.file('dest')
+}
+
+task copyLibs(type: Copy) {
+    from('lib')
+    into project.file('dest/lib')
 }
 
 task copyDeps(type: Copy) {
@@ -41,6 +46,7 @@ task copyReadmeFiles(type: Copy) {
     into project.file('dest')
 }
 
+build.dependsOn.add('copyLibs')
 build.dependsOn.add('copyJars')
 build.dependsOn.add('copyDeps')
 build.dependsOn.add('copyReadmeFiles')
