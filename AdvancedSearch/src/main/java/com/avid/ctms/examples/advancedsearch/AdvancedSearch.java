@@ -4,16 +4,13 @@ import com.avid.ctms.examples.tools.common.AuthorizationResponse;
 import com.avid.ctms.examples.tools.common.PlatformTools;
 import com.damnhandy.uri.template.UriTemplate;
 import kong.unirest.HttpResponse;
-import kong.unirest.JsonNode;
 import kong.unirest.Unirest;
 import net.sf.json.JSONArray;
 import net.sf.json.JSONObject;
-import reactor.util.function.Tuple2;
 
-import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.util.*;
 import java.util.Formatter;
@@ -80,7 +77,7 @@ public class AdvancedSearch {
                                 final URL advancedSearchResultPageURL = new URL(searchURITemplate.expand());
 
                                 // Create and send the process query's description:
-                                final String advancedSearchDescription = removeUTF8BOM(new String(Files.readAllBytes(advancedSearchDescriptionFilePath), Charset.forName("UTF-8")));
+                                final String advancedSearchDescription = removeUTF8BOM(new String(Files.readAllBytes(advancedSearchDescriptionFilePath), StandardCharsets.UTF_8));
 
                                 HttpResponse<String> advancedSearchResponse
                                         = Unirest.post(advancedSearchResultPageURL.toString())

@@ -79,7 +79,7 @@ public class SimpleSearchAsyncUnirest {
                             failed.terminate(e.getMessage(), e);
                         }
                     }
-                    , failed::terminate);
+                    , failed);
         } catch (Exception ex) {
             failed.terminate(null, ex);
         }

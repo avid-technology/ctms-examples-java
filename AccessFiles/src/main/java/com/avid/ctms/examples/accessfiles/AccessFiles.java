@@ -27,7 +27,7 @@ public class AccessFiles {
     private AccessFiles() {
     }
 
-    private static void getFileInformation(String urlAccessFileByUsageAndProtocol) throws UnirestException {
+    private static void getFileInformation(String urlAccessFileByUsageAndProtocol) {
         final HttpResponse<JsonNode> filesResponse =
                 Unirest.get(urlAccessFileByUsageAndProtocol)
                         .header("Accept", "application/hal+json")

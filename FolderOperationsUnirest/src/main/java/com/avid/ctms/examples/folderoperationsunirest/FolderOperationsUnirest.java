@@ -31,7 +31,7 @@ public class FolderOperationsUnirest {
     private FolderOperationsUnirest() {
     }
 
-    private static void performItemOperations(String locationsURL) throws UnirestException {
+    private static void performItemOperations(String locationsURL) {
         final HttpResponse<JsonNode> locationsResponse =
                 Unirest.get(locationsURL)
                         .header("Accept", "application/hal+json")
@@ -59,7 +59,7 @@ public class FolderOperationsUnirest {
 
     }
 
-    private static void renameFolder(String folderUrl, String newFolderName) throws UnirestException {
+    private static void renameFolder(String folderUrl, String newFolderName) {
         final String folderUpdateDescription = "{\"common\": {\"name\": \"" + newFolderName + "\"}}";
 
         final HttpResponse<JsonNode> updateFolderResponse =
@@ -79,7 +79,7 @@ public class FolderOperationsUnirest {
         }
     }
 
-    private static void performFolderOperations(ItemInfo parentItem) throws IOException, UnirestException {
+    private static void performFolderOperations(ItemInfo parentItem) {
         final String now = PlatformTools.nowFormatted().replaceAll("[\\-.:\\s+]", "_");
         final String newFolderName = "Java_Unirest_Example_Folder_" + now;
         final String newFolderDescription = "{\"common\": {\"name\": \"" + newFolderName + "\"}}";
