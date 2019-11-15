@@ -6,7 +6,7 @@ import java.net.*;
 import java.util.*;
 
 /**
- * Copyright 2013-2017 by Avid Technology, Inc.
+ * Copyright 2013-2019 by Avid Technology, Inc.
  * User: nludwig
  * Date: 2016-06-28
  * Time: 14:52

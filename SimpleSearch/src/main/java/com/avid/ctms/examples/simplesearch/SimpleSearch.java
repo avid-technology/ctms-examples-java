@@ -13,7 +13,7 @@ import kong.unirest.Unirest;
 import net.sf.json.*;
 
 /**
- * Copyright 2013-2017 by Avid Technology, Inc.
+ * Copyright 2013-2019 by Avid Technology, Inc.
  * User: nludwig
  * Date: 2016-06-17
  * Time: 08:14

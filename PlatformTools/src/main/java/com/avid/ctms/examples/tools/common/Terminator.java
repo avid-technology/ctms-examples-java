@@ -3,7 +3,7 @@ package com.avid.ctms.examples.tools.common;
 import java.util.function.*;
 
 /**
- * Copyright 2013-2017 by Avid Technology, Inc.
+ * Copyright 2013-2019 by Avid Technology, Inc.
  * User: nludwig
  * Date: 2017-05-04
  * Time: 08:47

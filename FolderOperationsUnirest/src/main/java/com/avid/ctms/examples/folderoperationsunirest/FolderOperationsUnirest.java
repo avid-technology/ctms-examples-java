@@ -13,7 +13,7 @@ import kong.unirest.*;
 import javax.ws.rs.core.UriBuilder;
 
 /**
- * Copyright 2013-2017 by Avid Technology, Inc.
+ * Copyright 2013-2019 by Avid Technology, Inc.
  * User: nludwig
  * Date: 2017-1-31
  * Time: 10:45

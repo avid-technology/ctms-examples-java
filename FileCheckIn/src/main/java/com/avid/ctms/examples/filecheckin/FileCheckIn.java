@@ -10,7 +10,7 @@ import org.json.*;
 
 
 /**
- * Copyright 2013-2017 by Avid Technology, Inc.
+ * Copyright 2013-2019 by Avid Technology, Inc.
  * User: nludwig
  * Date: 2016-11-16
  * Time: 07:36

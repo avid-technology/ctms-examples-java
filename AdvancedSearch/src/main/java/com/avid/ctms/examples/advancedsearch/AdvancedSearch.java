@@ -20,7 +20,7 @@ import java.util.Formatter;
 import java.util.logging.*;
 
 /**
- * Copyright 2013-2017 by Avid Technology, Inc.
+ * Copyright 2013-2019 by Avid Technology, Inc.
  * User: nludwig
  * Date: 2016-07-12
  * Time: 10:37
