@@ -38,7 +38,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * Copyright 2013-2017 by Avid Technology, Inc.
+ * Copyright 2013-2019 by Avid Technology, Inc.
  * User: nludwig
  * Date: 2016-06-13
  * Time: 07:36
@@ -87,12 +87,12 @@ public class PlatformTools {
      */
     public static AuthorizationResponse authorize(String apiDomain, String httpBasicAuthString)
             throws Exception {
-        initializeUniRest();
-        final String urlAuthorization = getIdentityProvider(apiDomain);
-        return login(urlAuthorization, httpBasicAuthString);
+        initializeUnirest();
+
+        return login(apiDomain, httpBasicAuthString);
     }
 
-    public static void initializeUniRest() throws KeyStoreException, NoSuchAlgorithmException, KeyManagementException {
+    private static void initializeUnirest() throws KeyStoreException, NoSuchAlgorithmException, KeyManagementException {
         final SSLContext sslContext
                 = org.apache.http.ssl.SSLContexts
                 .custom()
@@ -172,11 +172,12 @@ public class PlatformTools {
         return ropcDefaultIdentityProviderURL.get();
     }
 
-    private static AuthorizationResponse login(String urlAuthorization, String httpBasicAuthString) throws IOException {
+    private static AuthorizationResponse login(String apiDomain, String httpBasicAuthString) throws Exception {
         Unirest.config().clearDefaultHeaders();
         Unirest.config().setDefaultHeader("Accept", "application/json");
 
         final String loginContent = "grant_type=client_credentials&scope=openid";
+        final String urlAuthorization = getIdentityProvider(apiDomain);
         final String authorizationDefaultToken = String.format("Basic %s", httpBasicAuthString);
         final HttpResponse<JsonNode> loginResponse
                 = Unirest
@@ -193,7 +194,7 @@ public class PlatformTools {
             final String accessTokenHeaderFieldValue = String.format("Bearer %s", idToken);
 
             Unirest.config().setDefaultHeader("Authorization", accessTokenHeaderFieldValue);
-            initializeSessionRefresher(urlAuthorization);
+            initializeSessionRefresher(apiDomain);
             return new AuthorizationResponse(accessTokenHeaderFieldValue, loginResponse);
         }
         return new AuthorizationResponse(null, loginResponse);
@@ -203,12 +204,12 @@ public class PlatformTools {
         scheduler = Executors.newScheduledThreadPool(1);
         final Runnable sessionRefresher = () -> {
             try {
-                sendKeepAliveRequest(apiDomain);
+                sessionKeepAlive(apiDomain);
             } catch (final UnirestException | IOException e) {
                 LOG.log(Level.SEVERE, "Session refresher error", e);
             }
         };
-        final long refreshPeriodSeconds = 120;
+        final long refreshPeriodSeconds = 5;//120;
         PlatformTools.sessionRefresher = scheduler.scheduleAtFixedRate(sessionRefresher, refreshPeriodSeconds, refreshPeriodSeconds, TimeUnit.SECONDS);
     }
 
@@ -216,9 +217,8 @@ public class PlatformTools {
      * Signals the platform, that our session is still in use.
      *
      * @param apiDomain address against to which we want send a keep alive signal
-     * @throws UnirestException
      */
-    private static void sendKeepAliveRequest(String apiDomain) throws UnirestException, IOException {
+    private static void sessionKeepAlive(String apiDomain) throws IOException {
         final HttpResponse<JsonNode> jsonNodeHttpResponse
                 = Unirest
                 .get(String.format("https://%s/auth/", apiDomain))
@@ -228,7 +228,7 @@ public class PlatformTools {
         final String urlCurrentToken = links.getLinks().getToken().get(0).getHref();
         Unirest.get(urlCurrentToken)
                 .asStringAsync()
-                .thenApply(it -> {
+                .thenAccept(it -> {
                     final JSONObject currentTokenResult = JSONObject.fromObject(it.getBody());
                     final String urlExtend = currentTokenResult
                             .getJSONObject("_links")
@@ -236,9 +236,9 @@ public class PlatformTools {
                             .getJSONObject(0)
                             .get("href")
                             .toString();
-                    return urlExtend;
-                }).thenAccept(it -> {
-                    Unirest.post(it).asEmpty();
+                    final String accessToken = currentTokenResult.getString("accessToken");
+                    Unirest.config().setDefaultHeader("Cookie", "avidAccessToken="+accessToken);
+                    Unirest.post(urlExtend).asEmpty();
                 });
     }
 
@@ -284,7 +284,7 @@ public class PlatformTools {
      * the resource in question cannot be found, the list of URI templates will contain the
      * orDefaultUriTemplate as single entry.
      */
-    public static List<String> findInRegistry(String apiDomain, List<String> serviceTypes, String registryServiceVersion, String resourceName, String orDefaultUriTemplate) throws IOException {
+    public static List<String> findInRegistry(String apiDomain, List<String> serviceTypes, String registryServiceVersion, String resourceName, String orDefaultUriTemplate) {
         try {
             /// Check, whether the service registry is available:
             final HttpResponse<String> response

@@ -1,6 +1,6 @@
 package com.avid.ctms.examples.tools.reactor;
 /**
- * Copyright 2013-2017 by Avid Technology, Inc.
+ * Copyright 2013-2019 by Avid Technology, Inc.
  * User: nludwig
  * Date: 2017-01-09
  * Time: 07:36
@@ -84,7 +84,7 @@ public class PlatformToolsReactor {
         }
 
         return HttpAsyncClients.custom()
-                .setSSLHostnameVerifier(new NoopHostnameVerifier())
+                .setSSLHostnameVerifier(NoopHostnameVerifier.INSTANCE)
                 .setSSLContext(sslContext)
                 .setProxy((null != proxyHost) ? new HttpHost(proxyHost, Integer.parseInt(proxyPort)) : null)
                 .build();
@@ -544,7 +544,7 @@ public class PlatformToolsReactor {
 
         Unirest.get(urlCurrentToken)
                 .asStringAsync()
-                .thenApply(it -> {
+                .thenAccept(it -> {
                     final JSONObject currentTokenResult = new JSONObject(it.getBody());
                     final String urlExtend = currentTokenResult
                             .getJSONObject("_links")
@@ -552,10 +552,10 @@ public class PlatformToolsReactor {
                             .getJSONObject(0)
                             .get("href")
                             .toString();
-                    return urlExtend;
-                }).thenAccept(it -> {
-            Unirest.post(it).asEmpty();
-        });
+                    final String accessToken = currentTokenResult.getString("accessToken");
+                    Unirest.config().setDefaultHeader("Cookie", "avidAccessToken="+accessToken);
+                    Unirest.post(urlExtend).asEmpty();
+                });
     }
 
     public static void unregister() {

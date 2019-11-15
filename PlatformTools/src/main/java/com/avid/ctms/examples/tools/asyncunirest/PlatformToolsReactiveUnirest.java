@@ -1,6 +1,6 @@
 package com.avid.ctms.examples.tools.asyncunirest;
 /**
- * Copyright 2013-2017 by Avid Technology, Inc.
+ * Copyright 2013-2019 by Avid Technology, Inc.
  * User: nludwig
  * Date: 2017-01-09
  * Time: 07:36
@@ -65,7 +65,7 @@ public class PlatformToolsReactiveUnirest {
         }
 
         return HttpAsyncClients.custom()
-                .setSSLHostnameVerifier(new NoopHostnameVerifier())
+                .setSSLHostnameVerifier(NoopHostnameVerifier.INSTANCE)
                 .setSSLContext(sslContext)
                 .setProxy((null != proxyHost) ? new HttpHost(proxyHost, Integer.parseInt(proxyPort)) : null)
                 .build();
@@ -214,7 +214,7 @@ public class PlatformToolsReactiveUnirest {
                                 final Runnable sessionRefresherCode = () -> {
                                     try {
                                         sessionKeepAlive(apiDomain);
-                                    } catch (final IOException exception) {
+                                    } catch (final Exception exception) {
                                         LOG.log(Level.SEVERE, "failure", exception);
                                     }
                                 };
@@ -497,7 +497,7 @@ public class PlatformToolsReactiveUnirest {
      * @param apiDomain address against to which we want send a keep alive signal
      * @throws IOException
      */
-    public static void sessionKeepAlive(String apiDomain) throws IOException {
+    public static void sessionKeepAlive(String apiDomain) {
         final HttpResponse<String> jsonNodeHttpResponse
                 = Unirest
                 .get(String.format("https://%s/auth/", apiDomain))
@@ -513,7 +513,7 @@ public class PlatformToolsReactiveUnirest {
 
         Unirest.get(urlCurrentToken)
                 .asStringAsync()
-                .thenApply(it -> {
+                .thenAccept(it -> {
                     final JSONObject currentTokenResult = new JSONObject(it.getBody());
                     final String urlExtend = currentTokenResult
                             .getJSONObject("_links")
@@ -521,10 +521,10 @@ public class PlatformToolsReactiveUnirest {
                             .getJSONObject(0)
                             .get("href")
                             .toString();
-                    return urlExtend;
-                }).thenAccept(it -> {
-            Unirest.post(it).asEmpty();
-        });
+                    final String accessToken = currentTokenResult.getString("accessToken");
+                    Unirest.config().setDefaultHeader("Cookie", "avidAccessToken="+accessToken);
+                    Unirest.post(urlExtend).asEmpty();
+                });
     }
 
     public static void unregister() {
