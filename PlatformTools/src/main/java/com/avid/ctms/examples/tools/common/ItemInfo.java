@@ -1,12 +1,12 @@
 package com.avid.ctms.examples.tools.common;
 
-import net.sf.json.*;
+import kong.unirest.json.JSONObject;
 
 import java.net.*;
 import java.util.*;
 
 /**
- * Copyright 2013-2019 by Avid Technology, Inc.
+ * Copyright 2016-2021 by Avid Technology, Inc.
  * User: nludwig
  * Date: 2016-06-28
  * Time: 14:52
@@ -26,6 +26,7 @@ public class ItemInfo {
     public final int depth;
     public final URL href;
     public final boolean hasChildren;
+    public String id;
 
 
     public ItemInfo(String name, String type, int depth, URL href, boolean hasChildren) {
@@ -34,6 +35,7 @@ public class ItemInfo {
         this.depth = depth;
         this.href = href;
         this.hasChildren = hasChildren;
+
     }
 
     public ItemInfo(JSONObject item, int depth) throws MalformedURLException {
@@ -43,6 +45,8 @@ public class ItemInfo {
             , new URL(item.getJSONObject("_links").getJSONObject("self").getString("href"))
             , null != item.getJSONObject("_links").get("loc:collection"));
 
+        this.id = item.getJSONObject("base").getString("id");
+
         final Set<?> commonAttributesKeySet = item.getJSONObject("common").keySet();
         for (final Object commonAttributeKey : commonAttributesKeySet) {
             attributes.put(
@@ -50,7 +54,7 @@ public class ItemInfo {
                     , item.getJSONObject("common").getString(commonAttributeKey.toString()));
         }
 
-        if (item.containsKey("attributes")) {
+        if (item.has("attributes")) {
             for (final Object attributeElement : item.getJSONArray("attributes")) {
                 final JSONObject attributeDescription = (JSONObject) attributeElement;
                 attributes.put(

@@ -4,15 +4,15 @@ import com.avid.ctms.examples.tools.common.AuthorizationResponse;
 import com.avid.ctms.examples.tools.common.PlatformTools;
 import kong.unirest.HttpResponse;
 import kong.unirest.Unirest;
-import net.sf.json.JSONArray;
-import net.sf.json.JSONObject;
+import kong.unirest.json.*;
+
 
 import java.net.HttpURLConnection;
 import java.util.Formatter;
 import java.util.logging.*;
 
 /**
- * Copyright 2013-2019 by Avid Technology, Inc.
+ * Copyright 2016-2021 by Avid Technology, Inc.
  * User: nludwig
  * Date: 2016-07-04
  * Time: 13:41
@@ -48,23 +48,23 @@ public class QueryServiceRegistry {
                     if (HttpURLConnection.HTTP_OK == serviceRootsStatus) {
                         /// Doing the registry lookup and write the results to stdout:
                         final String rawServiceRootsResult = response.getBody();
-                        final JSONObject serviceRootsResult = JSONObject.fromObject(rawServiceRootsResult);
+                        final JSONObject serviceRootsResult = new JSONObject(rawServiceRootsResult);
 
                         final StringBuilder sb = new StringBuilder();
                         try (final Formatter formatter = new Formatter(sb)) {
-                            final JSONObject resources = serviceRootsResult.getJSONObject("resources");
+                            final JSONObject resources = serviceRootsResult.optJSONObject("resources");
                             if (null != resources) {
                                 for (final Object name : resources.names()) {
                                     formatter.format("Resource: \"%s\"%n", name);
-                                    final Object resourcesObject = serviceRootsResult.getJSONObject("resources").get(name);
+                                    final Object resourcesObject = serviceRootsResult.getJSONObject("resources").get((String) name);
                                     int index = 1;
                                     if (resourcesObject instanceof JSONArray) {
                                         for (final Object singleLinkObject : (JSONArray) resourcesObject) {
-                                            final String serviceHref = ((JSONObject) singleLinkObject).getString("href");
+                                            final String serviceHref = ((JSONObject) singleLinkObject).optString("href");
                                             formatter.format("\t%d. At service <%s>%n", index++, serviceHref);
                                         }
                                     } else {
-                                        final String serviceHref = ((JSONObject) resourcesObject).getString("href");
+                                        final String serviceHref = ((JSONObject) resourcesObject).optString("href");
                                         formatter.format("\t1. At service <%s>%n", serviceHref);
                                     }
                                 }

@@ -3,10 +3,8 @@ package com.avid.ctms.examples.queryaggregatedattributes;
 import com.avid.ctms.examples.tools.common.AuthorizationResponse;
 import com.avid.ctms.examples.tools.common.PlatformTools;
 import com.damnhandy.uri.template.*;
-import kong.unirest.HttpResponse;
-import kong.unirest.Unirest;
-import net.sf.json.JSONArray;
-import net.sf.json.JSONObject;
+import kong.unirest.*;
+import kong.unirest.json.*;
 
 import java.net.HttpURLConnection;
 import java.net.URL;
@@ -15,7 +13,7 @@ import java.util.Formatter;
 import java.util.logging.*;
 
 /**
- * Copyright 2013-2019 by Avid Technology, Inc.
+ * Copyright 2017-2021 by Avid Technology, Inc.
  * User: nludwig
  * Date: 2017-06-20
  * Time: 8:31
@@ -64,15 +62,15 @@ public class QueryAggregatedAttributes {
                     final int aggregatedDataModelStatus = response.getStatus();
                     if (HttpURLConnection.HTTP_OK == aggregatedDataModelStatus) {
                         final String rawAggregatedDataModelResult = response.getBody();
-                        final JSONObject aggregatedDataModelResult = JSONObject.fromObject(rawAggregatedDataModelResult);
+                        final JSONObject aggregatedDataModelResult = new JSONObject(rawAggregatedDataModelResult);
 
                         final JSONObject attributes = aggregatedDataModelResult.getJSONObject("attributes");
-                        if (null != attributes && !attributes.isNullObject()) {
+                        if (null != attributes && !JSONObject.NULL.equals(attributes)) {
                             final StringBuilder sb = new StringBuilder();
                             try (final Formatter formatter = new Formatter(sb)) {
                                 final Object customAttributes = attributes.get("custom");
                                 if (null != customAttributes) {
-                                    final List customAttributeList = flatten(customAttributes);
+                                    final List<Object> customAttributeList = flatten(customAttributes);
                                     formatter.format("%ncustom attributes:%n");
                                     int nCustomAttributes = 0;
                                     for (final Object attribute : customAttributeList) {
@@ -82,7 +80,7 @@ public class QueryAggregatedAttributes {
 
                                 final Object commonAttributes = attributes.get("common");
                                 if (null != commonAttributes) {
-                                    final List commonAttributeList = flatten(commonAttributes);
+                                    final List<Object> commonAttributeList = flatten(commonAttributes);
                                     formatter.format("%ncommon attributes:%n");
                                     int nCommonAttributes = 0;
                                     for (final Object attribute : commonAttributeList) {
@@ -116,7 +114,7 @@ public class QueryAggregatedAttributes {
         ArrayList<Object> attributeList = new ArrayList<>();
         if (customAttributes instanceof JSONArray) {
             final JSONArray array = (JSONArray) customAttributes;
-            attributeList.ensureCapacity(array.size());
+            attributeList.ensureCapacity(array.length());
             for (final Object attribute : array) {
                 attributeList.add(attribute);
             }

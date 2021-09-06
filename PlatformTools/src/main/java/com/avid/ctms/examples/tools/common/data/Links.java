@@ -1,3 +1,7 @@
+/*
+ * Copyright 2019-2021 by Avid Technology, Inc.
+ */
+
 package com.avid.ctms.examples.tools.common.data;
 
 import com.avid.ctms.examples.tools.common.data.embedded.Embedded;

@@ -3,17 +3,17 @@ package com.avid.ctms.examples.orchestration.startprocess;
 import com.avid.ctms.examples.tools.common.AuthorizationResponse;
 import com.avid.ctms.examples.tools.common.PlatformTools;
 import com.damnhandy.uri.template.UriTemplate;
-import kong.unirest.HttpResponse;
-import kong.unirest.Unirest;
-import net.sf.json.JSONObject;
+import kong.unirest.*;
+import kong.unirest.json.*;
 
+import javax.ws.rs.core.HttpHeaders;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.*;
 import java.util.logging.*;
 
 /**
- * Copyright 2013-2019 by Avid Technology, Inc.
+ * Copyright 2016-2021 by Avid Technology, Inc.
  * User: nludwig
  * Date: 2016-07-12
  * Time: 12:07
@@ -64,7 +64,7 @@ public class StartProcess {
 
                     final HttpResponse<String> response
                             = Unirest.post(startProcessURL.toString())
-                            .header("Content-Type", "application/json")
+                            .header(HttpHeaders.CONTENT_TYPE, "application/json")
                             .body(processDescription)
                             .asString();
 
@@ -73,7 +73,7 @@ public class StartProcess {
                     if (HttpURLConnection.HTTP_OK == startProcessStatus) {
                         // Begin monitoring the started process:
                         String rawStartedProcessResult = response.getBody();
-                        JSONObject startedProcessResult = JSONObject.fromObject(rawStartedProcessResult);
+                        JSONObject startedProcessResult = new JSONObject(rawStartedProcessResult);
                         final String urlStartedProcess = startedProcessResult.getJSONObject("_links").getJSONObject("self").getString("href");
                         String lifecycle = startedProcessResult.getString("lifecycle");
 
@@ -86,7 +86,7 @@ public class StartProcess {
                                 final HttpResponse<String> startedProcessResponse
                                         = Unirest.get(urlStartedProcess).asString();
 
-                                startedProcessResult = JSONObject.fromObject(startedProcessResponse.getBody());
+                                startedProcessResult = new JSONObject(startedProcessResponse.getBody());
                                 lifecycle = startedProcessResult.getString("lifecycle");
 
                                 LOG.log(Level.INFO, "Lifecycle: {0}", lifecycle);
@@ -95,6 +95,8 @@ public class StartProcess {
                     } else {
                         LOG.log(Level.INFO, "Starting process failed. - {0}", response.getStatusText());
                     }
+                } catch (final InterruptedException exception) {
+                    Thread.currentThread().interrupt();
                 } catch (final Exception exception) {
                     LOG.log(Level.SEVERE, "failure", exception);
                 } finally {

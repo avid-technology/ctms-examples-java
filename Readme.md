@@ -1,6 +1,6 @@
 # Please Read Me #
 * Implementation:
-    * The examples are implemented with Java 8, JDK 8.
+    * The examples are implemented with Java 11, JDK 11.
     * The examples use REST and HATEOAS.
     * The examples apply a lot of code repetition to keep them self contained.
     * The example SimpleSearchAsync shows, how asynchronous HTTP requests can be applied to use CTMS with reasteasy.
@@ -16,39 +16,40 @@
     * For testing purposes, it was required to configure HTTP libraries to accept arbitrary SSL certificates. Please notice, that this may not be acceptable for productive code.
 
 * Dependencies:
-    * Additionally, Handy URI Templates 2.1.2, json-lib 2.4, resteasy-client 3.0.19.Final, unirest-java:2.3.02, reactor-core:3.2.6.RELEASE and jackson-databind:2.9.4 were used. The gradle project is self contained and will automatically download dependent libraries from maven.
+    * Additionally, Handy URI Templates 2.1.8, resteasy-client 4.7.1.Final, unirest-java:3.11.12, reactor-core:3.4.9 and jackson-core:2.12.4 were used. The gradle project is self contained and will automatically download dependent libraries from maven.
 
-* Using gradle to build an run the examples:
-    * (Checked with gradle 2.14.)
+* Using gradle/gradlew to build and run the examples:
+    * (Checked with gradle 6.5.1.)
         * Creating an IntelliJ IDEA project from the sources, to allow easy code inspection and debugging:
-            * On the terminal cd to the directory where the examples reside and issue "gradle idea".
-            * This command will get dependent libraries from maven (e.g. json-lib 2.4) and create a file-based Idea project with subprojects for each example and one subproject with some tools.
+            * On the terminal cd to the directory where the examples reside and issue "gradlew idea".
+            * This command will get dependent libraries from maven and create a file-based Idea project with subprojects for each example and one subproject with some tools.
             * When running the examples in the IDE, make sure you have specified correct command line arguments: _apidomain_ _httpbasicauthstring_ [_servicetype_] _realm_
         * Creating runnable jars from the sources to run the examples w/o IDE:
-            * On the terminal cd to the directory where the examples reside and issue "gradle build".
-            * This command will get dependent libraries from maven (e.g. json-lib 2.4) and create runnable jars in directory "dest".
+            * On the terminal cd to the directory where the examples reside and issue "gradlew build".
+            * This command will get dependent libraries from maven and create runnable jars in directory "dest".
 
 * Special remarks on running the examples:
     * => When running the jars on a terminal, make sure you have specified correct command line arguments: java -jar __Example.jar__ _apidomain_ _httpbasicauthstring_ _[servicetype]_ _[realm]_ '_[searchexpression]_' _[advancedsearchdescriptionfilename]_
-    * The SimpleSearch/SimpleSearchAsync examples await the searchexpression in single quotes as last argument:
+    * The SimpleSearch/SimpleSearchAsyncUnirest/SimpleSearchReativeUnirest examples await the searchexpression in single quotes as last argument:
         * java -jar SimpleSearch.jar _apidomain_ _httpbasicauthstring_ _servicetype_ _serviceversion_ _realm_ '_searchexpression_'
         * Example: java -jar SimpleSearch.jar upstream httpbasicauthstring avid.mam.assets.access 0 BEEF "'*'"
-        * java -jar SimpleSearchAsync.jar _apidomain_ _httpbasicauthstring_ _servicetype_ _serviceversion_ _realm_ '_searchexpression_'
-        * Example: java -jar SimpleSearchAsync.jar upstream httpbasicauthstring avid.mam.assets.access 0 BEEF "'*'"
     * The AdvancedSearch example awaits the file name of a file containing the advanced search description as last argument:
         * java -jar AdvancedSearch.jar _apidomain_ _httpbasicauthstring_ _servicetype_ _serviceversion_ _realm_ _advancedsearchdescriptionfilename_
-        * Example: java -jar AdvancedSearch.jar upstream httpbasicauthstring avid.mam.assets.access 0 BEEF resources\MAMAdvancedSearchDescription.txt
+        * Example: java -jar AdvancedSearch.jar upstream httpbasicauthstring avid.mam.assets.access 0 BEEF resources/MAMAdvancedSearchDescription.txt
     * The Orchestration example (jar) contains multiple executable Java classes: com.avid.ctms.examples.orchestration.queryprocesses.QueryProcesses and com.avid.ctms.examples.orchestration.startprocesses.StartProcess. Those have to be executed with a different command line, esp. without servicetype, their servicetype is always "avid.orchestration.ctc" and with java's "-cp" option:
-        * java -cp Orchestration.jar _mainclassname_ _serviceversion_ _realm_ ['_searchexpression_']
-        * Example: java -cp Orchestration.jar com.avid.ctms.examples.orchestration.queryprocesses.QueryProcesses upstream 0 BEEF "'*'"
-        * Example: java -cp Orchestration.jar com.avid.ctms.examples.orchestration.startprocesses.StartProcess upstream 0 BEEF
+        * java -cp Orchestration.jar _mainclassname_ _apidomain_ _httpbasicauthstring_ _serviceversion_ _realm_ ['_searchexpression_']
+        * Example: java -cp Orchestration.jar com.avid.ctms.examples.orchestration.queryprocesses.QueryProcesses upstream httpbasicauthstring 0 BEEF "'*'"
+        * Example: java -cp Orchestration.jar com.avid.ctms.examples.orchestration.startprocesses.StartProcess upstream httpbasicauthstring 0 BEEF
     * The FileCheckIn example needs no servicetype (always "avid.mam.assets.access") argument.
         * java -jar FileCheckIn.jar _apidomain_ _serviceversion_ _realm_ _sourcepath_
             * _sourcepath_ represents the path, where the file to be checked in resides. If the path contains backslashes, it is required to escape it for three times each, e.g. one backslash must be represented by four backslashes.
         * java -jar FileCheckIn.jar upstream 0 BEEF Administrator ABRAXAS "\\\\\\\\nas4\\\\MAMSTORE\\\\mam-b\\\\MediaAssetManager\\\\Terminator.jpg"
     * The QueryServiceRegistry example needs no servicetype (always "avid.ctms.registry") and no realm (always "global"/"") argument.
-        * node java -jar QueryServiceRegistry.jar _apidomain_ _serviceversion_
-        * Example: java -jar QueryServiceRegistry.jar upstream 0
+        * java -jar QueryServiceRegistry.jar _apidomain_ _httpbasicauthstring_ _serviceversion_
+        * Example: java -jar QueryServiceRegistry.jar upstream httpbasicauthstring 0
     * Optionally, e.g. for debugging purposes, the JVM can be started with the VM arguments _-Dhttps.proxyHost=localhost -Dhttps.proxyPort=8888_ to configure a proxy server.
         * Notice, that using a proxy can reduce the performance of HTTP requests.
         * Notice also, that having set proxy options as shown above while *no proxy* is configured can reduce the performance of HTTP requests by an order of magnitude!
+        
+    Todos:
+    * Add an example using Java 11's HTTP/2 API with reactive interface (https://blog.codefx.org/java/reactive-http-2-requests-responses/).

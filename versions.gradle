@@ -1,0 +1,9 @@
+/*
+ * Copyright 2021 by Avid Technology, Inc.
+ */
+
+ext.reactorVersion = '3.4.9'
+ext.resteasyVersion = '4.7.1.Final'
+ext.handyURITemplatesVersion = '2.1.8'
+ext.unirestVersion = '3.11.12'
+ext.jacksonCoreVersion = '2.12.4'

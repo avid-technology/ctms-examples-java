@@ -5,19 +5,23 @@ import com.avid.ctms.examples.tools.common.data.Links;
 import com.avid.ctms.examples.tools.common.data.token.Token;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import kong.unirest.*;
-import net.sf.json.JSONArray;
-import net.sf.json.JSONObject;
+import kong.unirest.apache.ApacheAsyncClient;
+import kong.unirest.apache.ApacheClient;
+import kong.unirest.json.*;
 import org.apache.http.HttpHost;
 import org.apache.http.client.config.CookieSpecs;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.conn.ssl.NoopHostnameVerifier;
+import org.apache.http.conn.ssl.TrustAllStrategy;
 import org.apache.http.conn.ssl.TrustSelfSignedStrategy;
+import org.apache.http.conn.ssl.TrustStrategy;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.impl.nio.client.CloseableHttpAsyncClient;
 import org.apache.http.impl.nio.client.HttpAsyncClients;
 
 import javax.net.ssl.SSLContext;
+import javax.ws.rs.core.HttpHeaders;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
@@ -38,7 +42,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * Copyright 2013-2019 by Avid Technology, Inc.
+ * Copyright 2016-2021 by Avid Technology, Inc.
  * User: nludwig
  * Date: 2016-06-13
  * Time: 07:36
@@ -93,10 +97,11 @@ public class PlatformTools {
     }
 
     private static void initializeUnirest() throws KeyStoreException, NoSuchAlgorithmException, KeyManagementException {
+        final TrustStrategy trustEveryone = TrustAllStrategy.INSTANCE;
         final SSLContext sslContext
                 = org.apache.http.ssl.SSLContexts
                 .custom()
-                .loadTrustMaterial(null, TrustSelfSignedStrategy.INSTANCE)
+                .loadTrustMaterial(null, trustEveryone)
                 .build();
 
         final String proxyHost = System.getProperty("https.proxyHost");
@@ -111,32 +116,29 @@ public class PlatformTools {
                 .verifySsl(false)
                 .proxy((null != proxyHost) ? new kong.unirest.Proxy(proxyHost, Integer.parseInt(proxyPort)) : null);
 
-        final RequestConfig requestConfig
-                = RequestConfig.custom()
-                .setCookieSpec(CookieSpecs.STANDARD)
-                .setProxy((null != proxyHost) ? new HttpHost(proxyHost, Integer.parseInt(proxyPort)) : null)
-                .build();
+        final Config requestConfig
+                = new Config()
+                .cookieSpec(CookieSpecs.STANDARD)
+                .proxy((null != proxyHost) ? new kong.unirest.Proxy(proxyHost, Integer.parseInt(proxyPort)) : null);
 
         final CloseableHttpAsyncClient httpAsyncClient
                 = HttpAsyncClients
                 .custom()
                 .disableCookieManagement()
-                .setDefaultRequestConfig(requestConfig)
                 .setSSLHostnameVerifier(NoopHostnameVerifier.INSTANCE)
                 .setSSLContext(sslContext)
                 .build();
-        Unirest.config().asyncClient(httpAsyncClient);
+        Unirest.config().asyncClient(ApacheAsyncClient.builder(httpAsyncClient).apply(requestConfig));
 
         final CloseableHttpClient httpClient
                 = HttpClients
                 .custom()
                 .disableCookieManagement()
                 .disableRedirectHandling()
-                .setDefaultRequestConfig(requestConfig)
                 .setSSLHostnameVerifier(NoopHostnameVerifier.INSTANCE)
                 .setSSLContext(sslContext)
                 .build();
-        Unirest.config().httpClient(httpClient);
+        Unirest.config().httpClient(ApacheClient.builder(httpClient).apply(requestConfig));
     }
 
     private static String getIdentityProvider(String authEndpoint) throws Exception {
@@ -174,7 +176,7 @@ public class PlatformTools {
 
     private static AuthorizationResponse login(String apiDomain, String httpBasicAuthString) throws Exception {
         Unirest.config().clearDefaultHeaders();
-        Unirest.config().setDefaultHeader("Accept", "application/json");
+        Unirest.config().setDefaultHeader( HttpHeaders.ACCEPT, "application/json");
 
         final String loginContent = "grant_type=client_credentials&scope=openid";
         final String urlAuthorization = getIdentityProvider(apiDomain);
@@ -182,8 +184,8 @@ public class PlatformTools {
         final HttpResponse<JsonNode> loginResponse
                 = Unirest
                 .post(urlAuthorization)
-                .header("Content-Type", "application/x-www-form-urlencoded")
-                .header("Authorization", authorizationDefaultToken)
+                .header(HttpHeaders.CONTENT_TYPE, "application/x-www-form-urlencoded")
+                .header(HttpHeaders.AUTHORIZATION, authorizationDefaultToken)
                 .body(loginContent)
                 .asJson();
 
@@ -193,7 +195,7 @@ public class PlatformTools {
             final String idToken = token.isOpenIdConnectEnabled() ? token.getIdToken() : token.getAccessToken();
             final String accessTokenHeaderFieldValue = String.format("Bearer %s", idToken);
 
-            Unirest.config().setDefaultHeader("Authorization", accessTokenHeaderFieldValue);
+            Unirest.config().setDefaultHeader(HttpHeaders.AUTHORIZATION, accessTokenHeaderFieldValue);
             initializeSessionRefresher(apiDomain);
             return new AuthorizationResponse(accessTokenHeaderFieldValue, loginResponse);
         }
@@ -216,7 +218,7 @@ public class PlatformTools {
     /**
      * Signals the platform, that our session is still in use.
      *
-     * @param apiDomain address against to which we want send a keep alive signal
+     * @param apiDomain address against to which we want to send a keep alive signal
      */
     private static void sessionKeepAlive(String apiDomain) throws IOException {
         final HttpResponse<JsonNode> jsonNodeHttpResponse
@@ -229,7 +231,7 @@ public class PlatformTools {
         Unirest.get(urlCurrentToken)
                 .asStringAsync()
                 .thenAccept(it -> {
-                    final JSONObject currentTokenResult = JSONObject.fromObject(it.getBody());
+                    final JSONObject currentTokenResult = new JSONObject(it.getBody());
                     final String urlExtend = currentTokenResult
                             .getJSONObject("_links")
                             .getJSONArray("auth-token:extend")
@@ -251,6 +253,7 @@ public class PlatformTools {
     public static void logout(String apiDomain) throws IOException {
         callRemoveTokenRequest(apiDomain);
         removeSessionKeepAlive();
+        Unirest.shutDown();
     }
 
     private static void callRemoveTokenRequest(String apiDomain) throws IOException {
@@ -259,7 +262,7 @@ public class PlatformTools {
         final Links links = objectMapper.readValue(jsonNodeHttpResponse.getBody().toString(), Links.class);
         final String currentTokenRemovalUrl = links.getLinks().getToken().get(0).getHref();
         Unirest.delete(currentTokenRemovalUrl)
-                .header("Accept", "application/json")
+                .header( HttpHeaders.ACCEPT, "application/json")
                 .asEmpty();
     }
 
@@ -273,7 +276,7 @@ public class PlatformTools {
     /**
      * Performs a CTMS Registry lookup or defaults to the specified URI for the resource in question.
      *
-     * @param apiDomain              address against to which we want send a keep alive signal
+     * @param apiDomain              address against to which we want to send a keep alive signal
      * @param serviceTypes           list of service types, of which the resource in question should be looked up in the CTMS
      *                               Registry
      * @param registryServiceVersion registryServiceVersion version of the CTMS Registry to query
@@ -296,7 +299,7 @@ public class PlatformTools {
             if (HttpURLConnection.HTTP_OK == serviceRootsStatus) {
                 /// Doing the registry lookup and write the results to stdout:
                 final String rawServiceRootsResult = response.getBody();
-                final JSONObject serviceRootsResult = JSONObject.fromObject(rawServiceRootsResult);
+                final JSONObject serviceRootsResult = new JSONObject(rawServiceRootsResult);
 
                 final JSONObject resources = serviceRootsResult.getJSONObject("resources");
                 if (null != resources) {
@@ -304,7 +307,7 @@ public class PlatformTools {
                         final Object resourcesObject = resources.get(resourceName);
                         if (resourcesObject instanceof JSONArray) {
                             final JSONArray asArray = (JSONArray) resourcesObject;
-                            final List<String> foundUriTemplates = new ArrayList<>(asArray.size());
+                            final List<String> foundUriTemplates = new ArrayList<>(asArray.length());
                             for (final Object singleLinkObject : asArray) {
                                 final String href = ((JSONObject) singleLinkObject).getString("href");
                                 if (serviceTypes.stream().anyMatch(href::contains)) {

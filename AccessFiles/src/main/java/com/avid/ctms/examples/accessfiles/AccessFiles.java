@@ -1,17 +1,18 @@
 package com.avid.ctms.examples.accessfiles;
 
 import kong.unirest.*;
+import kong.unirest.json.*;
 import com.avid.ctms.examples.tools.common.*;
 import com.damnhandy.uri.template.*;
-import org.json.*;
 
+import javax.ws.rs.core.HttpHeaders;
 import java.net.*;
 import java.util.*;
 import java.util.Formatter;
 import java.util.logging.*;
 
 /**
- * Copyright 2013-2019 by Avid Technology, Inc.
+ * Copyright 2017-2021 by Avid Technology, Inc.
  * User: nludwig
  * Date: 2017-8-2
  * Time: 7:58
@@ -30,7 +31,7 @@ public class AccessFiles {
     private static void getFileInformation(String urlAccessFileByUsageAndProtocol) {
         final HttpResponse<JsonNode> filesResponse =
                 Unirest.get(urlAccessFileByUsageAndProtocol)
-                        .header("Accept", "application/hal+json")
+                        .header( HttpHeaders.ACCEPT, "application/hal+json")
                         .asJson();
         final int filesStatus = filesResponse.getStatus();
         if (HttpURLConnection.HTTP_OK == filesStatus) {
@@ -76,7 +77,7 @@ public class AccessFiles {
                     /// Directly getFileInformation the asset:
                     final HttpResponse<JsonNode> assetResponse =
                         Unirest.get(simpleSearchResultPageURL.toString())
-                                .header("Accept", "application/hal+json")
+                                .header( HttpHeaders.ACCEPT, "application/hal+json")
                                 .asJson();
 
                     final int assetStatus = assetResponse.getStatus();

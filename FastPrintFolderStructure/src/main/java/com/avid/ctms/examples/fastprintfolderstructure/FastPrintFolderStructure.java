@@ -10,10 +10,11 @@ import com.avid.ctms.examples.tools.common.ItemInfo;
 import com.avid.ctms.examples.tools.common.PlatformTools;
 import kong.unirest.HttpResponse;
 import kong.unirest.Unirest;
-import net.sf.json.*;
+import kong.unirest.json.*;
+
 
 /**
- * Copyright 2013-2019 by Avid Technology, Inc.
+ * Copyright 2016-2021 by Avid Technology, Inc.
  * User: nludwig
  * Date: 2016-06-14
  * Time: 08:54
@@ -42,13 +43,18 @@ public class FastPrintFolderStructure {
         final Collection<ItemInfo> children = new ArrayList<>();
         final URL itemURL = rootItem.href; //new URL(rootItem.href.replace(" ", "%20"));
 
+
+
         final HttpResponse<String> response = Unirest.get(itemURL.toString()).asString();
 
         final int itemStatus = response.getStatus();
         if (HttpURLConnection.HTTP_OK == itemStatus) {
             final String rawItemPageResults = response.getBody();
-            final JSONObject itemResult = JSONObject.fromObject(rawItemPageResults);
-            results.add(new ItemInfo(itemResult, depth));
+            final JSONObject itemResult = new JSONObject(rawItemPageResults);
+            final ItemInfo newItem = new ItemInfo(itemResult, depth);
+            results.add(newItem);
+            /**/ System.out.printf("%s <%s>%n", newItem, newItem.href);
+
 
             final JSONObject embedded = (JSONObject) itemResult.get("_embedded");
             JSONObject collection = null;
@@ -66,25 +72,32 @@ public class FastPrintFolderStructure {
                             if (itemsObject instanceof JSONArray) {
                                 final JSONArray items = (JSONArray) itemsObject;
 
-                                final Collection<ItemInfo> itemPage = new ArrayList<>(items.size());
+                                final Collection<ItemInfo> itemPage = new ArrayList<>(items.length());
                                 for (final Object item : items) {
                                     final JSONObject folderItem = (JSONObject) item;
                                     itemPage.add(new ItemInfo(folderItem, depth + 1));
                                 }
                                 children.addAll(itemPage);
+
+//                                if (itemPage.stream().anyMatch(it -> null != it.id && it.id.contains("1130.11354"))) {
+//                                    break;
+//                                }
+                                if (itemPage.stream().anyMatch(it -> null != it.name && it.name.contains("Draft"))) {
+                                    break;
+                                }
                             } else {
                                 children.add(new ItemInfo((JSONObject) itemsObject, depth + 1));
                             }
                         }
 
-                        final JSONObject linkToNextPage = (JSONObject) collection.getJSONObject("_links").get("next");
+                        final JSONObject linkToNextPage = (JSONObject) collection.getJSONObject("_links").opt("next");
                         if (null != linkToNextPage) {
 
                             final HttpResponse<String> page = Unirest.get(linkToNextPage.getString("href").replace(" ", "%20")).asString();
                             final int itemNextPageStatus = page.getStatus();
                             if (HttpURLConnection.HTTP_OK == itemNextPageStatus) {
                                 final String rawNextItemPageResults = page.getBody();
-                                collection = JSONObject.fromObject(rawNextItemPageResults);
+                                collection = new JSONObject(rawNextItemPageResults);
                                 embeddedItems = (JSONObject) collection.get("_embedded");
                             } else {
                                 collection = null;
@@ -96,6 +109,7 @@ public class FastPrintFolderStructure {
                 }
             }
 
+            //for (final ItemInfo item : children.stream().filter(it -> null != it.name && it.name.contains("Personal")).toArray(ItemInfo[]::new)) {
             for (final ItemInfo item : children) {
                 if (item.hasChildren) {
                     traverse(item, results, depth + 1);
@@ -105,6 +119,7 @@ public class FastPrintFolderStructure {
             for (final ItemInfo item : children) {
                 if (!item.hasChildren) {
                     results.add(item);
+                    /**/ System.out.printf("%s <%s>%n", item, item.href);
                 }
             }
         } else {
@@ -132,14 +147,14 @@ public class FastPrintFolderStructure {
                     final List<String> locationsUriTemplates = PlatformTools.findInRegistry(apiDomain, Collections.singletonList(serviceType), registryServiceVersion, "loc:locations", defaultLocationsUriTemplate);
 
                     /// Check presence of the locations resource and continue with HATEOAS:
-                    final String urlLocation = locationsUriTemplates.get(0);
+                    final String urlLocation = locationsUriTemplates.stream().filter(it -> it.contains("7D5A08FA-5D15-4BEB-8C41-FA85406FBBEC")).findFirst().get();
                     final HttpResponse<String> response = Unirest.get(urlLocation).asString();
 
                     final int locationsStatus = response.getStatus();
                     if (HttpURLConnection.HTTP_OK == locationsStatus) {
                         /// Get the root folder item:
                         final String rawLocationsResults = response.getBody();
-                        final JSONObject locationsResults = JSONObject.fromObject(rawLocationsResults);
+                        final JSONObject locationsResults = new JSONObject(rawLocationsResults);
                         final String urlRootItem = locationsResults.getJSONObject("_links").getJSONObject("loc:root-item").getString("href");
 
 
@@ -149,7 +164,9 @@ public class FastPrintFolderStructure {
                         // E.g. resulting in => https://$apiDomain/apis/$serviceType;version=0;realm=$realm/locations/folders?embed=asset
                         // !!
 
-                        final ItemInfo rootItem = new ItemInfo(null, null, 0, new URL(urlRootItem/*+"/25"?filter=item-type-folder"*/), true);
+                        //https://kl-sm-ics/apis/avid.mam.assets.access;version=9999;realm=18046458-EE19-4F42-80F3-47C8A977C688/locations/items/1131?offset=0&limit=100
+                        //final ItemInfo rootItem = new ItemInfo(null, null, 0, new URL(urlRootItem/*+"/25"?filter=item-type-folder"*/), true);
+                        final ItemInfo rootItem = new ItemInfo(null, null, 0, new URL(urlRootItem), true);
 
 
                         final List<ItemInfo> results = new ArrayList<>();
@@ -159,7 +176,7 @@ public class FastPrintFolderStructure {
                         final StringBuilder sb = new StringBuilder();
                         try (final Formatter formatter = new Formatter(sb)) {
                             for (final ItemInfo item : results) {
-                                formatter.format("%s <%s>%n", item, item.href);
+                               formatter.format("%s <%s>%n", item, item.href);
                             }
                         }
                         final long took = System.currentTimeMillis() - then;

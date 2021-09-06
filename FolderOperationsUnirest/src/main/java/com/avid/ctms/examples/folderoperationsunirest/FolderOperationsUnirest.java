@@ -1,6 +1,5 @@
 package com.avid.ctms.examples.folderoperationsunirest;
 
-import java.io.IOException;
 import java.net.*;
 import java.util.*;
 import java.util.logging.*;
@@ -10,10 +9,11 @@ import com.avid.ctms.examples.tools.common.ItemInfo;
 import com.avid.ctms.examples.tools.common.PlatformTools;
 import kong.unirest.*;
 
+import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.UriBuilder;
 
 /**
- * Copyright 2013-2019 by Avid Technology, Inc.
+ * Copyright 2017-2021 by Avid Technology, Inc.
  * User: nludwig
  * Date: 2017-1-31
  * Time: 10:45
@@ -34,7 +34,7 @@ public class FolderOperationsUnirest {
     private static void performItemOperations(String locationsURL) {
         final HttpResponse<JsonNode> locationsResponse =
                 Unirest.get(locationsURL)
-                        .header("Accept", "application/hal+json")
+                        .header( HttpHeaders.ACCEPT, "application/hal+json")
                         .asJson();
 
         final int locationsStatus = locationsResponse.getStatus();
@@ -49,14 +49,13 @@ public class FolderOperationsUnirest {
 
             final HttpResponse<JsonNode> itemByIDResponse =
                     Unirest.get("https://kl-serenity-mcs/apis/avid.pam;version=9999;realm=3D6B717E-B061-451B-A991-9CBDEA634050/locations/items/%2FCatalogs%2FOneArchive%2FAdmin%2FSuccess%2F")
-                            .header("Accept", "application/hal+json")
+                            .header( HttpHeaders.ACCEPT, "application/hal+json")
                             .asJson();
 
             final int itemByIDResponseStatus = itemByIDResponse.getStatus();
 
-            LOG.warning(""+itemByIDResponseStatus);
+            LOG.log(Level.INFO, "Response status: {0}", itemByIDResponseStatus);
         }
-
     }
 
     private static void renameFolder(String folderUrl, String newFolderName) {
@@ -64,7 +63,7 @@ public class FolderOperationsUnirest {
 
         final HttpResponse<JsonNode> updateFolderResponse =
                 Unirest.patch(folderUrl)
-                        .header("Content-Type", "application/json")
+                        .header(HttpHeaders.CONTENT_TYPE, "application/json")
                         .body(folderUpdateDescription)
                         .asJson();
 
@@ -86,7 +85,7 @@ public class FolderOperationsUnirest {
 
         final HttpResponse<JsonNode> createFolderResponse =
                 Unirest.post(parentItem.href.toString())
-                        .header("Content-Type", "application/json")
+                        .header(HttpHeaders.CONTENT_TYPE, "application/json")
                         .body(newFolderDescription)
                         .asJson();
 
@@ -132,7 +131,7 @@ public class FolderOperationsUnirest {
                     /// Check presence of the locations resource and continue with HATEOAS:
                     final HttpResponse<JsonNode> locationsResponse =
                             Unirest.get(urlLocations)
-                                    .header("Accept", "application/hal+json")
+                                    .header( HttpHeaders.ACCEPT, "application/hal+json")
                                     .asJson();
 
                     final int locationsStatus = locationsResponse.getStatus();

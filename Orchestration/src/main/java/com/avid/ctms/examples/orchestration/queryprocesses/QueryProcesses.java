@@ -5,9 +5,9 @@ import com.avid.ctms.examples.tools.common.PlatformTools;
 import com.damnhandy.uri.template.UriTemplate;
 import kong.unirest.HttpResponse;
 import kong.unirest.Unirest;
-import net.sf.json.JSONArray;
-import net.sf.json.JSONObject;
+import kong.unirest.json.*;
 
+import javax.ws.rs.core.HttpHeaders;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.*;
@@ -15,7 +15,7 @@ import java.util.Formatter;
 import java.util.logging.*;
 
 /**
- * Copyright 2013-2019 by Avid Technology, Inc.
+ * Copyright 2016-2021 by Avid Technology, Inc.
  * User: nludwig
  * Date: 2016-07-12
  * Time: 10:37
@@ -60,7 +60,7 @@ public class QueryProcesses {
                     final String queryContent = new JSONObject().accumulate("query", queryExpression).toString();
                     HttpResponse<String> processQueryResponse
                             = Unirest.post(processQueryURL.toString())
-                            .header("Content-Type", "application/json")
+                            .header(HttpHeaders.CONTENT_TYPE, "application/json")
                             .body(queryContent)
                             .asString();
 
@@ -73,8 +73,8 @@ public class QueryProcesses {
                         try (final Formatter formatter = new Formatter(sb)) {
                             do {
                                 final String rawProcessQueryPageResult = processQueryResponse.getBody();
-                                final JSONObject processQueryPageResult = JSONObject.fromObject(rawProcessQueryPageResult);
-                                final JSONObject embeddedResults = (JSONObject) processQueryPageResult.get("_embedded");
+                                final JSONObject processQueryPageResult = new JSONObject(rawProcessQueryPageResult);
+                                final JSONObject embeddedResults = (JSONObject) processQueryPageResult.opt("_embedded");
                                 // Do we have results:
                                 if (null != embeddedResults) {
                                     final JSONArray foundProcessInstances = embeddedResults.getJSONArray("orchestration:process");
@@ -84,7 +84,7 @@ public class QueryProcesses {
                                         for (final Object item : foundProcessInstances) {
                                             final JSONObject asset = (JSONObject) item;
                                             final String id = asset.getJSONObject("base").getString("id");
-                                            final String name = null != asset.getJSONObject("common").get("name") ? asset.getJSONObject("common").getString("name") : "";
+                                            final String name = null != asset.getJSONObject("common").opt("name") ? asset.getJSONObject("common").getString("name") : "";
 
                                             formatter.format("\tProcessItem#: %d, id: %s, name: '%s'%n", ++assetNo, id, name);
                                         }
@@ -94,7 +94,8 @@ public class QueryProcesses {
                                 }
 
                                 // If we have more results, follow the next link and get the next page:
-                                final JSONObject linkToNextPage = (JSONObject) processQueryPageResult.getJSONObject("_links").get("next");
+                                final JSONObject links = processQueryPageResult.optJSONObject("_links");
+                                final JSONObject linkToNextPage = null != links ? links.optJSONObject("next") : null;
                                 if (null != linkToNextPage) {
                                     processQueryResponse = Unirest.get(linkToNextPage.getString("href")).asString();
                                 } else {

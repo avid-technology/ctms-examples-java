@@ -1,6 +1,6 @@
 package com.avid.ctms.examples.tools.asyncunirest;
 /**
- * Copyright 2013-2019 by Avid Technology, Inc.
+ * Copyright 2017-2021 by Avid Technology, Inc.
  * User: nludwig
  * Date: 2017-01-09
  * Time: 07:36
@@ -8,15 +8,17 @@ package com.avid.ctms.examples.tools.asyncunirest;
  */
 
 import kong.unirest.*;
+import kong.unirest.apache.ApacheAsyncClient;
+import kong.unirest.json.*;
 import kong.unirest.HttpResponse;
 import org.apache.http.*;
+import org.apache.http.client.config.CookieSpecs;
 import org.apache.http.conn.ssl.*;
 import org.apache.http.impl.nio.client.*;
 import org.apache.http.ssl.SSLContexts;
-import org.json.*;
 
 import javax.net.ssl.*;
-import java.io.*;
+import javax.ws.rs.core.HttpHeaders;
 import java.net.HttpURLConnection;
 import java.security.*;
 import java.util.*;
@@ -50,9 +52,9 @@ public class PlatformToolsReactiveUnirest {
         return 60_000;
     }
 
-    private static CloseableHttpAsyncClient createSSLClient() throws KeyStoreException, NoSuchAlgorithmException, KeyManagementException {
+    private static AsyncClient createSSLClient() throws KeyStoreException, NoSuchAlgorithmException, KeyManagementException {
         final SSLContext sslContext =
-                SSLContexts
+                org.apache.http.ssl.SSLContexts
                         .custom()
                         .loadTrustMaterial(null, TrustSelfSignedStrategy.INSTANCE)
                         .build();
@@ -64,11 +66,25 @@ public class PlatformToolsReactiveUnirest {
             LOG.log(Level.INFO, "using proxy: {0}, port: {1}", new Object[]{proxyHost, proxyPort});
         }
 
-        return HttpAsyncClients.custom()
+        final Config requestConfig
+                = new Config()
+                .cookieSpec(CookieSpecs.STANDARD)
+                .proxy((null != proxyHost) ? new kong.unirest.Proxy(proxyHost, Integer.parseInt(proxyPort)) : null);
+
+        final CloseableHttpAsyncClient httpAsyncClient
+                = HttpAsyncClients
+                .custom()
+                .disableCookieManagement()
                 .setSSLHostnameVerifier(NoopHostnameVerifier.INSTANCE)
                 .setSSLContext(sslContext)
-                .setProxy((null != proxyHost) ? new HttpHost(proxyHost, Integer.parseInt(proxyPort)) : null)
                 .build();
+        return ApacheAsyncClient.builder(httpAsyncClient).apply(requestConfig);
+
+//        return HttpAsyncClients.custom()
+//                .setSSLHostnameVerifier(NoopHostnameVerifier.INSTANCE)
+//                .setSSLContext(sslContext)
+//                .setProxy((null != proxyHost) ? new HttpHost(proxyHost, Integer.parseInt(proxyPort)) : null)
+//                .build();
     }
 
     private PlatformToolsReactiveUnirest() {
@@ -98,7 +114,7 @@ public class PlatformToolsReactiveUnirest {
         final CompletableFuture<HttpResponse<JsonNode>> promise = new CompletableFuture<>();
 
         Unirest.get(String.format("https://%s/auth", apiDomain))
-                .header("Accept", "application/json")
+                .header( HttpHeaders.ACCEPT, "application/json")
                 .asJsonAsync(new Callback<JsonNode>() {
                     @Override
                     public void completed(HttpResponse<JsonNode> authResponse) {
@@ -140,7 +156,7 @@ public class PlatformToolsReactiveUnirest {
         try {
             final String urlIdentityProviders = authResult.getJSONObject("_links").getJSONArray("auth:identity-providers").getJSONObject(0).getString("href");
             Unirest.get(urlIdentityProviders)
-                    .header("Accept", "application/json")
+                    .header( HttpHeaders.ACCEPT, "application/json")
                     .asJsonAsync(new Callback<JsonNode>() {
                         @Override
                         public void completed(HttpResponse<JsonNode> response) {
@@ -198,9 +214,9 @@ public class PlatformToolsReactiveUnirest {
             final String loginContent = "grant_type=client_credentials&scope=openid";
             final String authorizationDefaultToken = String.format("Basic %s", httpBasicAuthString);
             Unirest.post(urlAuthorization)
-                    .header("Accept", "application/json")
-                    .header("Content-Type", "application/x-www-form-urlencoded")
-                    .header("Authorization", authorizationDefaultToken)
+                    .header( HttpHeaders.ACCEPT, "application/json")
+                    .header(HttpHeaders.CONTENT_TYPE, "application/x-www-form-urlencoded")
+                    .header(HttpHeaders.AUTHORIZATION, authorizationDefaultToken)
                     .body(loginContent)
                     .asJsonAsync(new Callback<JsonNode>() {
                         @Override
@@ -208,7 +224,7 @@ public class PlatformToolsReactiveUnirest {
                             if (HttpURLConnection.HTTP_OK == response.getStatus() || HttpURLConnection.HTTP_SEE_OTHER == response.getStatus()) {
                                 final String id_token = response.getBody().getObject().getString("id_token");
                                 final String accessTokenHeaderFieldValue = String.format("Bearer %s", id_token);
-                                Unirest.config().setDefaultHeader("Authorization", accessTokenHeaderFieldValue);
+                                Unirest.config().setDefaultHeader(HttpHeaders.AUTHORIZATION, accessTokenHeaderFieldValue);
 
                                 scheduler = Executors.newScheduledThreadPool(1);
                                 final Runnable sessionRefresherCode = () -> {
@@ -269,7 +285,7 @@ public class PlatformToolsReactiveUnirest {
 
         if (null != urlCurrentToken) {
             Unirest.get(urlCurrentToken)
-                    .header("Accept", "application/json")
+                    .header( HttpHeaders.ACCEPT, "application/json")
                     .asJsonAsync(new Callback<JsonNode>() {
                         @Override
                         public void completed(HttpResponse<JsonNode> currentTokenResponse) {
@@ -352,7 +368,7 @@ public class PlatformToolsReactiveUnirest {
         final CompletableFuture<List<String>> promise = new CompletableFuture<>();
 
         Unirest.get(String.format("https://%s/apis/avid.ctms.registry;version=%s/serviceroots", apiDomain, registryServiceVersion))
-                .header("Accept", "application/json")
+                .header( HttpHeaders.ACCEPT, "application/json")
                 .asJsonAsync(new Callback<JsonNode>() {
                     @Override
                     public void completed(HttpResponse<JsonNode> serviceRootsResponse) {
@@ -441,7 +457,7 @@ public class PlatformToolsReactiveUnirest {
         final List<JSONObject> pages = new ArrayList<>();
 
         Unirest.get(resultPageURL)
-                .header("Accept", "application/json")
+                .header( HttpHeaders.ACCEPT, "application/json")
                 .asJsonAsync(new Callback<JsonNode>() {
                     @Override
                     public void completed(HttpResponse<JsonNode> response) {
@@ -453,7 +469,7 @@ public class PlatformToolsReactiveUnirest {
 
                                     // If we have more results, follow the next link and get the next page:
                                     final JSONObject links = response.getBody().getObject().getJSONObject("_links");
-                                    final JSONObject nextPageLinkObject = links.has("next") ? links.getJSONObject("next") : null;
+                                    final JSONObject nextPageLinkObject = links.optJSONObject("next");
                                     if (null != nextPageLinkObject) {
                                         pageThroughResultsAsync(nextPageLinkObject.getString("href"))
                                                 .thenAccept(o -> {
@@ -495,7 +511,6 @@ public class PlatformToolsReactiveUnirest {
      * Signals to the platform, that our session is still in use.
      *
      * @param apiDomain address against to which we want send a keep alive signal
-     * @throws IOException
      */
     public static void sessionKeepAlive(String apiDomain) {
         final HttpResponse<String> jsonNodeHttpResponse
@@ -522,7 +537,7 @@ public class PlatformToolsReactiveUnirest {
                             .get("href")
                             .toString();
                     final String accessToken = currentTokenResult.getString("accessToken");
-                    Unirest.config().setDefaultHeader("Cookie", "avidAccessToken="+accessToken);
+                    Unirest.config().setDefaultHeader(HttpHeaders.COOKIE, "avidAccessToken="+accessToken);
                     Unirest.post(urlExtend).asEmpty();
                 });
     }

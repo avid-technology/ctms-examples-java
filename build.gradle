@@ -1,53 +1,71 @@
-apply plugin: 'idea'
-apply plugin: 'java'
+apply from: 'versions.gradle'
+
+allprojects {
+    apply plugin: 'java'
+    apply plugin: 'idea'
+}
 
 subprojects {
     repositories {
         mavenCentral()
     }
 
-    apply plugin: 'java'
     dependencies {
-        compile 'net.sf.json-lib:json-lib:2.4:jdk15'
-        compile 'org.jboss.resteasy:resteasy-client:3.0.19.Final'
-        compile 'com.konghq:unirest-java:2.3.02'
-        compile 'io.projectreactor:reactor-core:3.2.6.RELEASE'
-        compile 'com.damnhandy:handy-uri-templates:2.1.2'
-        compile 'com.fasterxml.jackson.core:jackson-databind:2.9.4'
-        compile 'io.undertow:undertow-websockets-jsr:1.4.25.Final'
+        implementation "org.jboss.resteasy:resteasy-client:${rootProject.resteasyVersion}"
+        implementation "com.konghq:unirest-java:${rootProject.unirestVersion}"
+        implementation "io.projectreactor:reactor-core:${rootProject.reactorVersion}"
+        implementation "com.damnhandy:handy-uri-templates:${rootProject.handyURITemplatesVersion}"
+        implementation "com.fasterxml.jackson.core:jackson-databind:${rootProject.jacksonCoreVersion}"
     }
-
-    sourceCompatibility = 1.8
-    targetCompatibility = 1.8
 }
 
+compileJava {
+    sourceCompatibility = JavaVersion.VERSION_11
+}
+
+// ================================= TASKS
+
+// :)
+final destination = 'dest'
+
 task copyJars(type: Copy, dependsOn: subprojects.jar) {
-    from(subprojects.jar)
-    into project.file('dest')
+    from subprojects.jar
+    into project.file(destination)
 }
 
 task copyLibs(type: Copy) {
-    from('lib')
-    into project.file('dest/lib')
+    from 'lib'
+    into project.file("$destination/lib")
 }
 
 task copyDeps(type: Copy) {
-    from(subprojects.configurations.runtime)
-    into project.file('dest/lib')
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    from subprojects.configurations.runtimeClasspath
+    into project.file("$destination/lib")
 }
 
 task copyArgumentFiles(type: Copy) {
     from 'resources'
-    into project.file('dest/resources')
+    into project.file("$destination/resources")
 }
 
 task copyReadmeFiles(type: Copy) {
     from 'Readme.md'
-    into project.file('dest')
+    into project.file(destination)
 }
 
-build.dependsOn.add('copyLibs')
-build.dependsOn.add('copyJars')
-build.dependsOn.add('copyDeps')
-build.dependsOn.add('copyReadmeFiles')
-build.dependsOn.add('copyArgumentFiles')
+task clearArtifacts(type: Delete) {
+    delete destination
+}
+
+clean {
+    dependsOn clearArtifacts
+}
+
+build {
+    dependsOn copyLibs
+    dependsOn copyJars
+    dependsOn copyDeps
+    dependsOn copyReadmeFiles
+    dependsOn copyArgumentFiles
+}

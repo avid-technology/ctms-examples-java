@@ -8,12 +8,13 @@ import java.util.logging.*;
 import com.avid.ctms.examples.tools.common.AuthorizationResponse;
 import com.avid.ctms.examples.tools.common.PlatformTools;
 import com.damnhandy.uri.template.UriTemplate;
-import kong.unirest.HttpResponse;
-import kong.unirest.Unirest;
-import net.sf.json.*;
+import kong.unirest.*;
+import kong.unirest.json.*;
+
+
 
 /**
- * Copyright 2013-2019 by Avid Technology, Inc.
+ * Copyright 2016-2021 by Avid Technology, Inc.
  * User: nludwig
  * Date: 2016-06-17
  * Time: 08:14
@@ -64,7 +65,7 @@ public class SimpleSearch {
                             if (HttpURLConnection.HTTP_OK == simpleSearchStatus) {
                                 final String rawSimpleSearchPageResult = response.getBody();
 
-                                final JSONObject simpleSearchPageResult = JSONObject.fromObject(rawSimpleSearchPageResult);
+                                final JSONObject simpleSearchPageResult = new JSONObject(rawSimpleSearchPageResult);
                                 final JSONObject embeddedResults = (JSONObject) simpleSearchPageResult.get("_embedded");
                                 // Do we have results:
                                 if (null != embeddedResults) {
@@ -88,7 +89,7 @@ public class SimpleSearch {
                                 }
 
                                 // If we have more results, follow the next link and get the next page:
-                                final JSONObject linkToNextPage = (JSONObject) simpleSearchPageResult.getJSONObject("_links").get("next");
+                                final JSONObject linkToNextPage = (JSONObject) simpleSearchPageResult.getJSONObject("_links").opt("next");
                                 simpleSearchResultPageURL
                                         = null != linkToNextPage
                                         ? new URL(linkToNextPage.getString("href"))
