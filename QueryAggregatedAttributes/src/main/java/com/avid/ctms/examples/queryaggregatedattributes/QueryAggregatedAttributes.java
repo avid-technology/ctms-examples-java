@@ -64,11 +64,11 @@ public class QueryAggregatedAttributes {
                         final String rawAggregatedDataModelResult = response.getBody();
                         final JSONObject aggregatedDataModelResult = new JSONObject(rawAggregatedDataModelResult);
 
-                        final JSONObject attributes = aggregatedDataModelResult.getJSONObject("attributes");
+                        final JSONObject attributes = aggregatedDataModelResult.optJSONObject("attributes");
                         if (null != attributes && !JSONObject.NULL.equals(attributes)) {
                             final StringBuilder sb = new StringBuilder();
                             try (final Formatter formatter = new Formatter(sb)) {
-                                final Object customAttributes = attributes.get("custom");
+                                final Object customAttributes = attributes.opt("custom");
                                 if (null != customAttributes) {
                                     final List<Object> customAttributeList = flatten(customAttributes);
                                     formatter.format("%ncustom attributes:%n");
@@ -78,7 +78,7 @@ public class QueryAggregatedAttributes {
                                     }
                                 }
 
-                                final Object commonAttributes = attributes.get("common");
+                                final Object commonAttributes = attributes.opt("common");
                                 if (null != commonAttributes) {
                                     final List<Object> commonAttributeList = flatten(commonAttributes);
                                     formatter.format("%ncommon attributes:%n");

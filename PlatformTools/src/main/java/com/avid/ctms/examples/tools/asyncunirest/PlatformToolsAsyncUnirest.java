@@ -266,7 +266,7 @@ public class PlatformToolsAsyncUnirest {
                         if (HttpURLConnection.HTTP_OK == serviceRootsResponse.getStatus() || HttpURLConnection.HTTP_SEE_OTHER == serviceRootsResponse.getStatus()) {
                             final JSONObject serviceRootsResult = serviceRootsResponse.getBody().getObject();
                             try {
-                                final JSONObject resources = serviceRootsResult.getJSONObject("resources");
+                                final JSONObject resources = serviceRootsResult.optJSONObject("resources");
                                 if (null != resources) {
                                     if (resources.has(resourceName)) {
                                         final Object resourcesObject = resources.get(resourceName);
@@ -450,8 +450,8 @@ public class PlatformToolsAsyncUnirest {
 
                             String urlCurrentToken = null;
                             for (int i = 0; i < authTokens.length(); ++i) {
-                                if (Objects.equals(authTokens.getJSONObject(i).getString("name"), "current")) {
-                                    urlCurrentToken = authTokens.getJSONObject(i).getString("href");
+                                if (Objects.equals(authTokens.getJSONObject(i).optString("name"), "current")) {
+                                    urlCurrentToken = authTokens.getJSONObject(i).optString("href");
                                     break;
                                 }
                             }

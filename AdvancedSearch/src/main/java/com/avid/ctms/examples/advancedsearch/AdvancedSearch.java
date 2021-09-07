@@ -68,7 +68,7 @@ public class AdvancedSearch {
                         if (HttpURLConnection.HTTP_OK == searchesStatus) {
                             final String rawSearchesResult = response.getBody();
                             final JSONObject searchesResult = new JSONObject(rawSearchesResult);
-                            final Object advancedSearchLinkObject = searchesResult.getJSONObject("_links").get("search:advanced-search");
+                            final Object advancedSearchLinkObject = searchesResult.getJSONObject("_links").opt("search:advanced-search");
                             // Is advanced search supported?
                             if (null != advancedSearchLinkObject) {
                                 /// Doing the advanced search and write the results to stdout:
@@ -108,7 +108,7 @@ public class AdvancedSearch {
                                                     for (final Object item : foundAssets) {
                                                         final JSONObject asset = (JSONObject) item;
                                                         final String id = asset.getJSONObject("base").getString("id");
-                                                        final String name = null != asset.getJSONObject("common").get("name") ? asset.getJSONObject("common").getString("name") : "";
+                                                        final String name = null != asset.getJSONObject("common").opt("name") ? asset.getJSONObject("common").getString("name") : "";
 
                                                         formatter.format("\tAsset#: %d, id: %s, name: '%s'%n", ++assetNo, id, name);
                                                     }

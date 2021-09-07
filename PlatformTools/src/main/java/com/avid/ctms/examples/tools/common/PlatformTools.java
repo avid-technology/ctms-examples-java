@@ -301,7 +301,7 @@ public class PlatformTools {
                 final String rawServiceRootsResult = response.getBody();
                 final JSONObject serviceRootsResult = new JSONObject(rawServiceRootsResult);
 
-                final JSONObject resources = serviceRootsResult.getJSONObject("resources");
+                final JSONObject resources = serviceRootsResult.optJSONObject("resources");
                 if (null != resources) {
                     if (resources.has(resourceName)) {
                         final Object resourcesObject = resources.get(resourceName);

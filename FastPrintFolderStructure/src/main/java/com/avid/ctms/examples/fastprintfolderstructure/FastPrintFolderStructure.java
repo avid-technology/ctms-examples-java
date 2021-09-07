@@ -56,18 +56,18 @@ public class FastPrintFolderStructure {
             /**/ System.out.printf("%s <%s>%n", newItem, newItem.href);
 
 
-            final JSONObject embedded = (JSONObject) itemResult.get("_embedded");
+            final JSONObject embedded = (JSONObject) itemResult.opt("_embedded");
             JSONObject collection = null;
             if (null != embedded) {
-                collection = (JSONObject) embedded.get("loc:collection");
+                collection = (JSONObject) embedded.opt("loc:collection");
             }
             // The item to traverse is a folder:
             if (null != collection) {
                 // Get the items of the folder pagewise:
-                JSONObject embeddedItems = (JSONObject) collection.get("_embedded");
+                JSONObject embeddedItems = (JSONObject) collection.opt("_embedded");
                 if (null != embeddedItems) {
                     do {
-                        final Object itemsObject = embeddedItems.get("loc:item");
+                        final Object itemsObject = embeddedItems.opt("loc:item");
                         if (null != itemsObject) {
                             if (itemsObject instanceof JSONArray) {
                                 final JSONArray items = (JSONArray) itemsObject;
@@ -98,7 +98,7 @@ public class FastPrintFolderStructure {
                             if (HttpURLConnection.HTTP_OK == itemNextPageStatus) {
                                 final String rawNextItemPageResults = page.getBody();
                                 collection = new JSONObject(rawNextItemPageResults);
-                                embeddedItems = (JSONObject) collection.get("_embedded");
+                                embeddedItems = (JSONObject) collection.opt("_embedded");
                             } else {
                                 collection = null;
                             }
@@ -147,7 +147,7 @@ public class FastPrintFolderStructure {
                     final List<String> locationsUriTemplates = PlatformTools.findInRegistry(apiDomain, Collections.singletonList(serviceType), registryServiceVersion, "loc:locations", defaultLocationsUriTemplate);
 
                     /// Check presence of the locations resource and continue with HATEOAS:
-                    final String urlLocation = locationsUriTemplates.stream().filter(it -> it.contains("7D5A08FA-5D15-4BEB-8C41-FA85406FBBEC")).findFirst().get();
+                    final String urlLocation = locationsUriTemplates.stream().filter(it -> it.contains(realm)).findFirst().get();
                     final HttpResponse<String> response = Unirest.get(urlLocation).asString();
 
                     final int locationsStatus = response.getStatus();

@@ -66,7 +66,7 @@ public class SimpleSearch {
                                 final String rawSimpleSearchPageResult = response.getBody();
 
                                 final JSONObject simpleSearchPageResult = new JSONObject(rawSimpleSearchPageResult);
-                                final JSONObject embeddedResults = (JSONObject) simpleSearchPageResult.get("_embedded");
+                                final JSONObject embeddedResults = (JSONObject) simpleSearchPageResult.opt("_embedded");
                                 // Do we have results:
                                 if (null != embeddedResults) {
                                     final JSONArray foundAssets = embeddedResults.getJSONArray("aa:asset");

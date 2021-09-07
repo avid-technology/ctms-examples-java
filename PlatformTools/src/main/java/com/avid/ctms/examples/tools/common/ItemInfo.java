@@ -39,11 +39,11 @@ public class ItemInfo {
     }
 
     public ItemInfo(JSONObject item, int depth) throws MalformedURLException {
-        this(item.getJSONObject("common").getString("name")
+        this(item.getJSONObject("common").optString("name")
             , item.getJSONObject("base").getString("type")
             , depth
-            , new URL(item.getJSONObject("_links").getJSONObject("self").getString("href"))
-            , null != item.getJSONObject("_links").get("loc:collection"));
+            , new URL(item.getJSONObject("_links").getJSONObject("self").optString("href"))
+            , null != item.getJSONObject("_links").opt("loc:collection"));
 
         this.id = item.getJSONObject("base").getString("id");
 
