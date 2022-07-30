@@ -3,8 +3,6 @@
     * The examples are implemented with Java 11, JDK 11.
     * The examples use REST and HATEOAS.
     * The examples apply a lot of code repetition to keep them self contained.
-    * The example SimpleSearchAsync shows, how asynchronous HTTP requests can be applied to use CTMS with reasteasy.
-    * The example SimpleSearchAsyncUnirest shows, how asynchronous HTTP requests can be applied to use CTMS with Unirest. (Unirest is the recommended API for async. communication.)
     * All examples are configured to use a connection timeout and a read/socket timeout of 60s each.
     * When running the examples it is required to pass an HTTP basic auth string via the command line. The HTTP basic auth string token can be obtained from Avid.
     * If appropriate for an example, the CTMS Registry is queried for the resource in question, instead using a hard coded URL.
@@ -30,20 +28,6 @@
 
 * Special remarks on running the examples:
     * => When running the jars on a terminal, make sure you have specified correct command line arguments: java -jar __Example.jar__ _apidomain_ _httpbasicauthstring_ _[servicetype]_ _[realm]_ '_[searchexpression]_' _[advancedsearchdescriptionfilename]_
-    * The SimpleSearch/SimpleSearchAsyncUnirest/SimpleSearchReativeUnirest examples await the searchexpression in single quotes as last argument:
-        * java -jar SimpleSearch.jar _apidomain_ _httpbasicauthstring_ _servicetype_ _serviceversion_ _realm_ '_searchexpression_'
-        * Example: java -jar SimpleSearch.jar upstream httpbasicauthstring avid.mam.assets.access 0 BEEF "'*'"
-    * The AdvancedSearch example awaits the file name of a file containing the advanced search description as last argument:
-        * java -jar AdvancedSearch.jar _apidomain_ _httpbasicauthstring_ _servicetype_ _serviceversion_ _realm_ _advancedsearchdescriptionfilename_
-        * Example: java -jar AdvancedSearch.jar upstream httpbasicauthstring avid.mam.assets.access 0 BEEF resources/MAMAdvancedSearchDescription.txt
-    * The Orchestration example (jar) contains multiple executable Java classes: com.avid.ctms.examples.orchestration.queryprocesses.QueryProcesses and com.avid.ctms.examples.orchestration.startprocesses.StartProcess. Those have to be executed with a different command line, esp. without servicetype, their servicetype is always "avid.orchestration.ctc" and with java's "-cp" option:
-        * java -cp Orchestration.jar _mainclassname_ _apidomain_ _httpbasicauthstring_ _serviceversion_ _realm_ ['_searchexpression_']
-        * Example: java -cp Orchestration.jar com.avid.ctms.examples.orchestration.queryprocesses.QueryProcesses upstream httpbasicauthstring 0 BEEF "'*'"
-        * Example: java -cp Orchestration.jar com.avid.ctms.examples.orchestration.startprocesses.StartProcess upstream httpbasicauthstring 0 BEEF
-    * The FileCheckIn example needs no servicetype (always "avid.mam.assets.access") argument.
-        * java -jar FileCheckIn.jar _apidomain_ _serviceversion_ _realm_ _sourcepath_
-            * _sourcepath_ represents the path, where the file to be checked in resides. If the path contains backslashes, it is required to escape it for three times each, e.g. one backslash must be represented by four backslashes.
-        * java -jar FileCheckIn.jar upstream 0 BEEF Administrator ABRAXAS "\\\\\\\\nas4\\\\MAMSTORE\\\\mam-b\\\\MediaAssetManager\\\\Terminator.jpg"
     * The QueryServiceRegistry example needs no servicetype (always "avid.ctms.registry") and no realm (always "global"/"") argument.
         * java -jar QueryServiceRegistry.jar _apidomain_ _httpbasicauthstring_ _serviceversion_
         * Example: java -jar QueryServiceRegistry.jar upstream httpbasicauthstring 0
