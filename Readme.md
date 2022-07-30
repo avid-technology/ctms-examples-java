@@ -27,7 +27,7 @@
             * This command will get dependent libraries from maven and create runnable jars in directory "dest".
 
 * Special remarks on running the examples:
-    * => When running the jars on a terminal, make sure you have specified correct command line arguments: java -jar __Example.jar__ _apidomain_ _httpbasicauthstring_ _[servicetype]_ _[realm]_ '_[searchexpression]_' _[advancedsearchdescriptionfilename]_
+    * => When running the jars on a terminal, make sure you have specified correct command line arguments: java -jar __Example.jar__ _apidomain_ _httpbasicauthstring_ _[servicetype]_ _[realm]_
     * The QueryServiceRegistry example needs no servicetype (always "avid.ctms.registry") and no realm (always "global"/"") argument.
         * java -jar QueryServiceRegistry.jar _apidomain_ _httpbasicauthstring_ _serviceversion_
         * Example: java -jar QueryServiceRegistry.jar upstream httpbasicauthstring 0
